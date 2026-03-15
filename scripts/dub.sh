@@ -183,8 +183,10 @@ output_files = []
 failed_count = 0
 success_count = 0
 
+print(f"  开始生成 {len(segments)} 条字幕配音...", flush=True)
+
 for i, seg in enumerate(segments):
-    print(f"    生成 {i+1}/{len(segments)}...", end='\r')
+    print(f"    生成 {i+1}/{len(segments)}...", flush=True)
 
     success = False
     last_error = None
@@ -214,7 +216,7 @@ for i, seg in enumerate(segments):
             # Handle rate limit and unusual activity
             if response.status_code == 429 or (response.status_code == 401 and 'unusual_activity' in response.text.lower()):
                 wait_time = RETRY_DELAY * (2 ** attempt)  # Exponential backoff
-                print(f"\n    段 {i+1} 触发限流，等待 {wait_time:.1f}秒...")
+                print(f"\n    段 {i+1} 触发限流，等待 {wait_time:.1f}秒...", flush=True)
                 time.sleep(wait_time)
                 continue
 
@@ -242,10 +244,10 @@ for i, seg in enumerate(segments):
             last_error = str(e)
             if attempt < MAX_RETRIES - 1:
                 wait_time = RETRY_DELAY * (2 ** attempt)
-                print(f"\n    段 {i+1} 尝试 {attempt+1} 失败：{e}, 等待 {wait_time:.1f}秒后重试...")
+                print(f"\n    段 {i+1} 尝试 {attempt+1} 失败：{e}, 等待 {wait_time:.1f}秒后重试...", flush=True)
                 time.sleep(wait_time)
             else:
-                print(f"\n    段 {i+1} 生成失败：{last_error}")
+                print(f"\n    段 {i+1} 生成失败：{last_error}", flush=True)
                 failed_count += 1
                 # Create silent segment as placeholder
                 output_files.append({
