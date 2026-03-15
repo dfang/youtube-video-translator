@@ -218,7 +218,16 @@ for block in blocks:
         })
 
 if not parsed:
-    exit(0)
+    # Fallback: copy the already-converted SRT file if it exists
+    import os, shutil
+    srt_converted = vtt_file.replace('.vtt', '.srt')
+    if os.path.exists(srt_converted):
+        shutil.copy(srt_converted, output_file)
+        print(f"  VTT 解析失败，已复制 SRT 文件：{output_file}")
+        exit(0)
+    else:
+        print(f"  VTT 解析失败且无 SRT 文件：{vtt_file}")
+        exit(1)
 
 # Extract full text by removing duplicate prefixes
 full_parts = []
