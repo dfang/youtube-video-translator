@@ -47,11 +47,14 @@ source ~/.zshrc
 最终文件：VIDEO_TITLE.zh-CN.final.mp4 (15.2MB)
 - 🎬 1920x1080 视频
 - 🎙️ 中文配音（克隆原声）
+- 📝 硬烧字幕（中文字幕或中英文双语）
 - ⏱️ 时长 3:24
 
 中间文件已保留在工作区。
 使用 --cleanup 参数可清理中间文件。
 ```
+
+**注意**：最终视频已硬烧入字幕，可在 QuickTime Player 或任何 MP4 播放器直接显示字幕，无需外部字幕文件。
 
 ## 高级用法
 
@@ -68,6 +71,20 @@ source ~/.zshrc
 ### 指定目标语言
 ```
 /yt-translate <URL> --lang ja  # 翻译成日语
+```
+
+### 选择字幕类型
+```
+# 仅中文字幕（默认）
+/yt-translate <URL> --subtitles chinese
+
+# 中英文双语字幕
+/yt-translate <URL> --subtitles bilingual
+```
+
+### 组合多个参数
+```
+/yt-translate <URL> --subtitles bilingual --cleanup --lang zh-CN
 ```
 
 ## 技术细节
