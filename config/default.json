@@ -1,0 +1,26 @@
+{
+  "elevenlabs": {
+    "api_key_env": "ELEVENLABS_API_KEY",
+    "model": "eleven_multilingual_v2",
+    "stability": 0.5,
+    "similarity_boost": 0.75,
+    "style": 0.0,
+    "use_speaker_boost": true
+  },
+  "translation": {
+    "target_language": "zh-CN",
+    "google_translate_service": true,
+    "subtitle_max_chars": 4000
+  },
+  "download": {
+    "video_format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+    "audio_format": "mp3",
+    "subtitle_languages": ["en", "zh-Hans", "zh-Hant"],
+    "cookies_from_browser": "chrome"
+  },
+  "output": {
+    "keep_intermediates": true,
+    "cleanup_flag": "--cleanup",
+    "mps_acceleration": true
+  }
+}

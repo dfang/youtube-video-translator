@@ -1,0 +1,22 @@
+#!/bin/bash
+# yt-translate - YouTube Video Translator CLI Wrapper
+# Installation: ln -s /Users/fang/.openclaw/workspace/skills/youtube-video-translator/scripts/yt-translate /usr/local/bin/yt-translate
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MAIN_SCRIPT="$SCRIPT_DIR/translate.sh"
+
+# Check if running from symlink or direct
+if [[ ! -f "$MAIN_SCRIPT" ]]; then
+    # Try relative path
+    SCRIPT_DIR="$(dirname "$0")"
+    MAIN_SCRIPT="$SCRIPT_DIR/translate.sh"
+fi
+
+if [[ ! -f "$MAIN_SCRIPT" ]]; then
+    echo "❌ 错误：找不到主脚本 translate.sh"
+    echo "请确保脚本在正确的位置"
+    exit 1
+fi
+
+# Execute main script
+exec bash "$MAIN_SCRIPT" "$@"
