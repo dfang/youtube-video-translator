@@ -79,9 +79,10 @@ if not api_key:
 DEFAULT_VOICE_ID = "pNInz6obpgDQGcFmaJgB"
 
 # Rate limiting: wait between requests (seconds)
-REQUEST_DELAY = 1.0  # Base delay between successful requests
-MAX_RETRIES = 5      # Max retries per segment
-RETRY_DELAY = 3.0    # Delay before first retry
+# Increased delays to handle ElevenLabs strict rate limiting
+REQUEST_DELAY = 2.0  # Base delay between successful requests
+MAX_RETRIES = 3      # Max retries per segment (reduced to avoid long waits)
+RETRY_DELAY = 5.0    # Delay before first retry
 
 def parse_srt(srt_file):
     """Parse SRT file into segments"""
