@@ -132,20 +132,26 @@ def get_voice_id_from_audio(audio_file):
         url = "https://api.elevenlabs.io/v1/voices/add"
         headers = {
             "xi-api-key": api_key,
-            "Content-Type": "multipart/form-data"
         }
 
-        files = {
-            'files': ('audio.mp3', open(audio_file, 'rb'), 'audio/mpeg')
-        }
+        with open(audio_file, 'rb') as f:
+            files = {
+                'files': ('audio.mp3', f, 'audio/mpeg')
+            }
 
-        data = {
-            'name': 'Cloned Voice',
-            'description': 'Voice cloned from video'
-        }
+            data = {
+                'name': 'Cloned Voice',
+                'description': 'Voice cloned from video'
+            }
 
-        response = requests.post(url, headers=headers, files=files, data=data, timeout=60)
+            response = requests.post(url, headers=headers, files=files, data=data, timeout=60)
+
         result = response.json()
+
+        # Check for payment required error
+        if response.status_code == 400 and 'payment_required' in result.get('detail', {}).get('type', ''):
+            print(f"    声音克隆失败：账户不支持 instant voice cloning，使用默认声音")
+            return None
 
         voice_id = result.get('voice_id')
         if voice_id:
