@@ -10,9 +10,9 @@ SUBTITLE_TYPE="${2:-chinese}"  # chinese or bilingual
 
 cd "$WORK_DIR"
 
-# Find files
-VIDEO_FILE=$(ls *.original.mp4 2>/dev/null | head -1)
-SRT_FILE=$(ls *.zh-CN.srt 2>/dev/null | head -1)
+# Find files - use find to handle filenames with spaces
+VIDEO_FILE=$(find . -maxdepth 1 -name "*.original.mp4" -type f | head -1)
+SRT_FILE=$(find . -maxdepth 1 -name "*.zh-CN.srt" -type f | head -1)
 
 if [[ -z "$VIDEO_FILE" ]]; then
     echo "❌ 未找到原始视频"
@@ -27,11 +27,11 @@ fi
 BASE_NAME="${SRT_FILE%.zh-CN.srt}"
 
 # Find voice-map for Chinese dubbing (prefer non-.en version)
-VOICE_MAP=$(ls *.voice-map.json 2>/dev/null | grep -v '\.en\.voice-map\.json' | head -1)
+VOICE_MAP=$(find . -maxdepth 1 -name "*.voice-map.json" -type f | grep -v '\.en\.voice-map\.json' | head -1)
 
 if [[ -z "$VOICE_MAP" ]]; then
     # Fallback to any voice-map
-    VOICE_MAP=$(ls *.voice-map.json 2>/dev/null | head -1)
+    VOICE_MAP=$(find . -maxdepth 1 -name "*.voice-map.json" -type f | head -1)
 fi
 
 if [[ -z "$VOICE_MAP" ]]; then

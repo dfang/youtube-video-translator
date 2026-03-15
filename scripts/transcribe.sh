@@ -287,8 +287,8 @@ CLEAN_EOF
 echo "  检测字幕文件..."
 
 # Priority 1: Check if Chinese subtitle already exists (zh-CN.srt)
-if [[ -f "zh-CN.srt" ]] || ls *.zh-CN.srt 2>/dev/null | head -1 | grep -q .; then
-    CHINESE_SRT=$(ls *.zh-CN.srt 2>/dev/null | head -1)
+CHINESE_SRT=$(find . -maxdepth 1 -name "*.zh-CN.srt" -type f | head -1)
+if [[ -n "$CHINESE_SRT" ]]; then
     echo "  找到已有中文字幕：$CHINESE_SRT"
     SRT_FILE="$CHINESE_SRT"
     BASE_NAME="${SRT_FILE%.*}"
@@ -299,21 +299,21 @@ if [[ -f "zh-CN.srt" ]] || ls *.zh-CN.srt 2>/dev/null | head -1 | grep -q .; the
 fi
 
 # Priority 2: Check for zh-Hans.vtt or zh-Hans.srt (Simplified Chinese from YouTube)
-if ls *.zh-Hans.vtt 2>/dev/null | head -1 | grep -q .; then
-    ZH_HANS_VTT=$(ls *.zh-Hans.vtt 2>/dev/null | head -1)
+ZH_HANS_VTT=$(find . -maxdepth 1 -name "*.zh-Hans.vtt" -type f | head -1)
+if [[ -n "$ZH_HANS_VTT" ]]; then
     echo "  找到简体中文字幕：$ZH_HANS_VTT"
     # Get base name from video file
-    VIDEO_BASE=$(ls *.original.mp4 2>/dev/null | head -1)
+    VIDEO_BASE=$(find . -maxdepth 1 -name "*.original.mp4" -type f | head -1)
     VIDEO_BASE="${VIDEO_BASE%.original.mp4}"
     copy_chinese_subtitle "$ZH_HANS_VTT" "$VIDEO_BASE.zh-CN.srt"
     echo "✅ 字幕处理完成（使用下载的中文字幕）"
     exit 0
 fi
 
-if ls *.zh-Hans.srt 2>/dev/null | head -1 | grep -q .; then
-    ZH_HANS_SRT=$(ls *.zh-Hans.srt 2>/dev/null | head -1)
+ZH_HANS_SRT=$(find . -maxdepth 1 -name "*.zh-Hans.srt" -type f | head -1)
+if [[ -n "$ZH_HANS_SRT" ]]; then
     echo "  找到简体中文字幕：$ZH_HANS_SRT"
-    VIDEO_BASE=$(ls *.original.mp4 2>/dev/null | head -1)
+    VIDEO_BASE=$(find . -maxdepth 1 -name "*.original.mp4" -type f | head -1)
     VIDEO_BASE="${VIDEO_BASE%.original.mp4}"
     cp "$ZH_HANS_SRT" "$VIDEO_BASE.zh-CN.srt"
     echo "✅ 字幕处理完成（使用下载的中文字幕）"
@@ -321,20 +321,20 @@ if ls *.zh-Hans.srt 2>/dev/null | head -1 | grep -q .; then
 fi
 
 # Priority 3: Check for zh-Hant.vtt or zh-Hant.srt (Traditional Chinese)
-if ls *.zh-Hant.vtt 2>/dev/null | head -1 | grep -q .; then
-    ZH_HANT_VTT=$(ls *.zh-Hant.vtt 2>/dev/null | head -1)
+ZH_HANT_VTT=$(find . -maxdepth 1 -name "*.zh-Hant.vtt" -type f | head -1)
+if [[ -n "$ZH_HANT_VTT" ]]; then
     echo "  找到繁体中文字幕：$ZH_HANT_VTT"
-    VIDEO_BASE=$(ls *.original.mp4 2>/dev/null | head -1)
+    VIDEO_BASE=$(find . -maxdepth 1 -name "*.original.mp4" -type f | head -1)
     VIDEO_BASE="${VIDEO_BASE%.original.mp4}"
     copy_chinese_subtitle "$ZH_HANT_VTT" "$VIDEO_BASE.zh-CN.srt"
     echo "✅ 字幕处理完成（使用下载的中文字幕，繁转简可能需要额外处理）"
     exit 0
 fi
 
-if ls *.zh-Hant.srt 2>/dev/null | head -1 | grep -q .; then
-    ZH_HANT_SRT=$(ls *.zh-Hant.srt 2>/dev/null | head -1)
+ZH_HANT_SRT=$(find . -maxdepth 1 -name "*.zh-Hant.srt" -type f | head -1)
+if [[ -n "$ZH_HANT_SRT" ]]; then
     echo "  找到繁体中文字幕：$ZH_HANT_SRT"
-    VIDEO_BASE=$(ls *.original.mp4 2>/dev/null | head -1)
+    VIDEO_BASE=$(find . -maxdepth 1 -name "*.original.mp4" -type f | head -1)
     VIDEO_BASE="${VIDEO_BASE%.original.mp4}"
     cp "$ZH_HANT_SRT" "$VIDEO_BASE.zh-CN.srt"
     echo "✅ 字幕处理完成（使用下载的中文字幕）"
@@ -344,9 +344,9 @@ fi
 # Priority 4: No Chinese subtitles, need to translate from English
 echo "  未找到中文字幕，准备翻译英文字幕..."
 
-# Find English subtitle files
-VTT_FILE=$(ls *.en.vtt 2>/dev/null | head -1)
-SRT_FILE=$(ls *.en.srt 2>/dev/null | head -1)
+# Find English subtitle files - use find to handle filenames with spaces
+VTT_FILE=$(find . -maxdepth 1 -name "*.en.vtt" -type f | head -1)
+SRT_FILE=$(find . -maxdepth 1 -name "*.en.srt" -type f | head -1)
 
 if [[ -n "$VTT_FILE" ]]; then
     echo "  找到英文字幕：$VTT_FILE"

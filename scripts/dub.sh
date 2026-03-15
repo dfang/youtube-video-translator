@@ -22,16 +22,18 @@ cd "$WORK_DIR"
 
 # Find files - for TTS generation, use English subtitle (for voice cloning accuracy)
 # First try to find English-only subtitle file (created when bilingual mode is enabled)
-EN_SRT_FILE=$(ls *.en.only.srt 2>/dev/null | head -1)
+# Use find instead of ls to handle filenames with spaces
+EN_SRT_FILE=$(find . -maxdepth 1 -name "*.en.only.srt" -type f | head -1)
 
 # If no English-only file, use original English subtitle
 if [[ -z "$EN_SRT_FILE" ]]; then
-    EN_SRT_FILE=$(ls *.en.srt 2>/dev/null | head -1)
+    EN_SRT_FILE=$(find . -maxdepth 1 -name "*.en.srt" -type f | head -1)
 fi
 
 # For dubbed audio output naming, still use TARGET_LANG subtitle
-TARGET_SRT_FILE=$(ls *.$TARGET_LANG.srt 2>/dev/null | head -1)
-AUDIO_FILE=$(ls *.audio.mp3 2>/dev/null | head -1)
+# Use find instead of ls to handle filenames with spaces
+TARGET_SRT_FILE=$(find . -maxdepth 1 -name "*.$TARGET_LANG.srt" -type f | head -1)
+AUDIO_FILE=$(find . -maxdepth 1 -name "*.audio.mp3" -type f | head -1)
 
 if [[ -z "$TARGET_SRT_FILE" ]]; then
     echo "❌ 未找到中文字幕文件"
