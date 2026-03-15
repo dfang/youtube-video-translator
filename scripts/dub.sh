@@ -214,8 +214,21 @@ for i, seg in enumerate(segments):
 
             response = requests.post(url, headers=headers, json=payload, timeout=120)
 
-            # Handle rate limit and unusual activity
-            if response.status_code == 429 or (response.status_code == 401 and 'unusual_activity' in response.text.lower()):
+            # Check for permanent errors (no retry)
+            if response.status_code == 401:
+                resp_text = response.text.lower()
+                if 'unusual_activity' in resp_text or 'free_tier' in resp_text or 'paid_plan' in resp_text:
+                    print(f"\n    ❌ API 错误：需要付费订阅才能继续使用", flush=True)
+                    print(f"    详情：{response.text[:200]}", flush=True)
+                    print(f"\n  配音生成失败：ElevenLabs API 需要付费订阅", flush=True)
+                    exit(1)
+                else:
+                    print(f"\n    API 认证失败：{response.text[:200]}", flush=True)
+                    time.sleep(RETRY_DELAY)
+                    continue
+
+            # Handle rate limit
+            if response.status_code == 429:
                 wait_time = RETRY_DELAY * (2 ** attempt)  # Exponential backoff
                 print(f"\n    段 {i+1} 触发限流，等待 {wait_time:.1f}秒...", flush=True)
                 time.sleep(wait_time)
