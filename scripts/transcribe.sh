@@ -325,6 +325,9 @@ if [[ -n "$ZH_HANS_VTT" ]]; then
             fi
             echo "  已保存英文字幕：$VIDEO_BASE.en.srt"
         fi
+        # Bilingual mode done - English subtitle ready for TTS, Chinese subtitle ready for display
+        echo "✅ 字幕处理完成（双语模式）"
+        exit 0
     else
         echo "✅ 字幕处理完成（使用下载的中文字幕）"
         exit 0
@@ -341,6 +344,21 @@ if [[ -n "$ZH_HANS_SRT" ]]; then
     # If bilingual mode, also need to prepare English subtitle for TTS
     if [[ "$SUBTITLE_TYPE" == "bilingual" ]]; then
         echo "  双语模式：继续处理英文字幕..."
+        # Convert English VTT to SRT for TTS if needed
+        EN_VTT=$(find . -maxdepth 1 -name "*.en.vtt" -type f | head -1)
+        if [[ -n "$EN_VTT" ]]; then
+            echo "  找到英文字幕：$EN_VTT"
+            if ffmpeg -i "$EN_VTT" "$VIDEO_BASE.en.srt" 2>/dev/null; then
+                echo "  使用 ffmpeg 转换英文字幕成功"
+            else
+                cat "$EN_VTT" | sed 's/WEBVTT//g' | sed 's/Kind:[^ ]*//g' | sed 's/Default:[^ ]*//g' > "$VIDEO_BASE.en.tmp.srt"
+                mv "$VIDEO_BASE.en.tmp.srt" "$VIDEO_BASE.en.srt"
+                echo "  使用 sed 转换英文字幕成功"
+            fi
+            echo "  已保存英文字幕：$VIDEO_BASE.en.srt"
+        fi
+        echo "✅ 字幕处理完成（双语模式）"
+        exit 0
     else
         echo "✅ 字幕处理完成（使用下载的中文字幕）"
         exit 0
@@ -354,11 +372,28 @@ if [[ -n "$ZH_HANT_VTT" ]]; then
     VIDEO_BASE=$(find . -maxdepth 1 -name "*.original.mp4" -type f | head -1)
     VIDEO_BASE="${VIDEO_BASE%.original.mp4}"
     copy_chinese_subtitle "$ZH_HANT_VTT" "$VIDEO_BASE.zh-CN.srt"
-    echo "✅ 字幕处理完成（使用下载的中文字幕，繁转简可能需要额外处理）"
-    # If bilingual mode, continue to process English
-    if [[ "$SUBTITLE_TYPE" != "bilingual" ]]; then
+
+    # If bilingual mode, also need to prepare English subtitle for TTS
+    if [[ "$SUBTITLE_TYPE" == "bilingual" ]]; then
+        echo "  双语模式：继续处理英文字幕..."
+        EN_VTT=$(find . -maxdepth 1 -name "*.en.vtt" -type f | head -1)
+        if [[ -n "$EN_VTT" ]]; then
+            echo "  找到英文字幕：$EN_VTT"
+            if ffmpeg -i "$EN_VTT" "$VIDEO_BASE.en.srt" 2>/dev/null; then
+                echo "  使用 ffmpeg 转换英文字幕成功"
+            else
+                cat "$EN_VTT" | sed 's/WEBVTT//g' | sed 's/Kind:[^ ]*//g' | sed 's/Default:[^ ]*//g' > "$VIDEO_BASE.en.tmp.srt"
+                mv "$VIDEO_BASE.en.tmp.srt" "$VIDEO_BASE.en.srt"
+                echo "  使用 sed 转换英文字幕成功"
+            fi
+            echo "  已保存英文字幕：$VIDEO_BASE.en.srt"
+        fi
+        echo "✅ 字幕处理完成（双语模式）"
         exit 0
     fi
+
+    echo "✅ 字幕处理完成（使用下载的中文字幕，繁转简可能需要额外处理）"
+    exit 0
 fi
 
 ZH_HANT_SRT=$(find . -maxdepth 1 -name "*.zh-Hant.srt" -type f | head -1)
@@ -367,11 +402,28 @@ if [[ -n "$ZH_HANT_SRT" ]]; then
     VIDEO_BASE=$(find . -maxdepth 1 -name "*.original.mp4" -type f | head -1)
     VIDEO_BASE="${VIDEO_BASE%.original.mp4}"
     cp "$ZH_HANT_SRT" "$VIDEO_BASE.zh-CN.srt"
-    echo "✅ 字幕处理完成（使用下载的中文字幕）"
-    # If bilingual mode, continue to process English
-    if [[ "$SUBTITLE_TYPE" != "bilingual" ]]; then
+
+    # If bilingual mode, also need to prepare English subtitle for TTS
+    if [[ "$SUBTITLE_TYPE" == "bilingual" ]]; then
+        echo "  双语模式：继续处理英文字幕..."
+        EN_VTT=$(find . -maxdepth 1 -name "*.en.vtt" -type f | head -1)
+        if [[ -n "$EN_VTT" ]]; then
+            echo "  找到英文字幕：$EN_VTT"
+            if ffmpeg -i "$EN_VTT" "$VIDEO_BASE.en.srt" 2>/dev/null; then
+                echo "  使用 ffmpeg 转换英文字幕成功"
+            else
+                cat "$EN_VTT" | sed 's/WEBVTT//g' | sed 's/Kind:[^ ]*//g' | sed 's/Default:[^ ]*//g' > "$VIDEO_BASE.en.tmp.srt"
+                mv "$VIDEO_BASE.en.tmp.srt" "$VIDEO_BASE.en.srt"
+                echo "  使用 sed 转换英文字幕成功"
+            fi
+            echo "  已保存英文字幕：$VIDEO_BASE.en.srt"
+        fi
+        echo "✅ 字幕处理完成（双语模式）"
         exit 0
     fi
+
+    echo "✅ 字幕处理完成（使用下载的中文字幕）"
+    exit 0
 fi
 
 # Priority 4: No Chinese subtitles, need to translate from English
