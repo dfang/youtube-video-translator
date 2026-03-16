@@ -474,9 +474,11 @@ if [[ -n "$VTT_FILE" ]]; then
 
     # Convert VTT to SRT
     echo "  转换 VTT 为 SRT..."
-    ffmpeg -i "$VTT_FILE" "$BASE_NAME.srt" 2>/dev/null || \
-    cat "$VTT_FILE" | sed 's/WEBVTT//g' | sed 's/Kind:[^ ]*//g' | sed 's/Default:[^ ]*//g' > "$BASE_NAME.tmp.srt" && \
-    mv "$BASE_NAME.tmp.srt" "$BASE_NAME.srt"
+    if ! ffmpeg -i "$VTT_FILE" "$BASE_NAME.srt" 2>/dev/null; then
+        echo "  ffmpeg 转换失败，使用 sed 手动转换..."
+        cat "$VTT_FILE" | sed 's/WEBVTT//g' | sed 's/Kind:[^ ]*//g' | sed 's/Default:[^ ]*//g' > "$BASE_NAME.tmp.srt"
+        mv "$BASE_NAME.tmp.srt" "$BASE_NAME.srt"
+    fi
 
     SRT_FILE="$BASE_NAME.srt"
 elif [[ -n "$SRT_FILE" ]]; then
@@ -616,6 +618,8 @@ print(f"  共 {len(blocks)} 条字幕")
 
 translated_blocks = []
 original_blocks = []
+start_time = __import__('time').time()
+
 for i, block in enumerate(blocks):
     original_text = ' '.join(block['text'])
     original_blocks.append(block.copy())
@@ -626,7 +630,11 @@ for i, block in enumerate(blocks):
         continue
 
     # Translate
-    print(f"    翻译 {i+1}/{len(blocks)}...", end='\r')
+    elapsed = __import__('time').time() - start_time
+    avg_time = elapsed / (i + 1) if i > 0 else 0
+    remaining = (len(blocks) - i - 1) * avg_time
+    progress = (i + 1) / len(blocks) * 100
+    print(f"    翻译 {i+1}/{len(blocks)} ({progress:.1f}%) - 剩余 {remaining:.0f}s   ", end='\r', flush=True)
     translated_text = translate_text(original_text, "$TARGET_LANG")
 
     # Update block
@@ -641,7 +649,7 @@ for i, block in enumerate(blocks):
     # Rate limiting
     time.sleep(0.5)
 
-print(f"  翻译完成！")
+print(f"\n  翻译完成！")
 
 # Write translated SRT
 output_file = "$BASE_NAME.$TARGET_LANG.srt"

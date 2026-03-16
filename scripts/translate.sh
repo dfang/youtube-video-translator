@@ -98,41 +98,89 @@ echo ""
 mkdir -p "$WORK_DIR"
 cd "$WORK_DIR"
 
+# Helper function to print step status
+print_status() {
+    local step=$1
+    local total=$2
+    local desc=$3
+    local status=$4
+    local icon=""
+    case $status in
+        "running") icon="🔄" ;;
+        "done") icon="✅" ;;
+        "fail") icon="❌" ;;
+        "warn") icon="⚠️" ;;
+    esac
+    echo -ne "\r${icon} 步骤 ${step}/${total}: ${desc}   "
+}
+
+mark_step_done() {
+    local step=$1
+    local total=$2
+    local desc=$3
+    echo -e "\r✅ 步骤 ${step}/${total}: ${desc} [完成]"
+}
+
+mark_step_fail() {
+    local step=$1
+    local total=$2
+    local desc=$3
+    echo -e "\r❌ 步骤 ${step}/${total}: ${desc} [失败]"
+}
+
 # Step 1: Download video and subtitles
-echo "📥 步骤 1/5: 下载视频和字幕..."
+print_status 1 5 "下载视频和字幕" "running"
 bash "$SCRIPT_DIR/download.sh" "$VIDEO_URL" "$TARGET_LANG" "$SUBTITLE_SOURCE"
 if [[ $? -ne 0 ]]; then
+    mark_step_fail 1 5 "下载视频和字幕"
     echo "⚠️ 下载失败，尝试继续..."
+else
+    mark_step_done 1 5 "下载视频和字幕"
 fi
 
 # Step 2: Extract/Translate subtitles
-echo "📝 步骤 2/5: 处理字幕..."
+print_status 2 5 "处理字幕" "running"
 bash "$SCRIPT_DIR/transcribe.sh" "$WORK_DIR" "$TARGET_LANG" "$SUBTITLE_TYPE" "$SUBTITLE_SOURCE"
 if [[ $? -ne 0 ]]; then
+    mark_step_fail 2 5 "处理字幕"
     echo "⚠️ 字幕处理失败，尝试继续..."
+else
+    mark_step_done 2 5 "处理字幕"
 fi
 
 # Step 3: Generate dubbed audio
-echo "🎙️ 步骤 3/5: 生成中文配音..."
-bash "$SCRIPT_DIR/dub.sh" "$WORK_DIR" "$TARGET_LANG" "$VOICE_LIBRARY"
+print_status 3 5 "生成中文配音" "running"
+# Pass empty string for VOICE_NAME when VOICE_LIBRARY is false (use default voice)
+VOICE_PARAM=""
+if [[ "$VOICE_LIBRARY" = true ]]; then
+    VOICE_PARAM="library"
+fi
+bash "$SCRIPT_DIR/dub.sh" "$WORK_DIR" "$TARGET_LANG" "$VOICE_PARAM"
 if [[ $? -ne 0 ]]; then
+    mark_step_fail 3 5 "生成中文配音"
     echo "❌ 配音生成失败"
     exit 1
+else
+    mark_step_done 3 5 "生成中文配音"
 fi
 
 # Step 4: Merge video and audio
-echo "🎬 步骤 4/5: 合成视频..."
+print_status 4 5 "合成视频" "running"
 bash "$SCRIPT_DIR/merge.sh" "$WORK_DIR" "$SUBTITLE_TYPE"
 if [[ $? -ne 0 ]]; then
+    mark_step_fail 4 5 "合成视频"
     echo "❌ 视频合成失败"
     exit 1
+else
+    mark_step_done 4 5 "合成视频"
 fi
 
 # Step 5: Cleanup (optional)
 if [[ "$CLEANUP" = true ]]; then
-    echo "🧹 步骤 5/5: 清理中间文件..."
+    mark_step_done 5 5 "清理中间文件"
     bash "$SCRIPT_DIR/cleanup.sh" "$WORK_DIR"
 else
+    echo ""
     echo "💾 中间文件已保留在工作区"
 fi
 

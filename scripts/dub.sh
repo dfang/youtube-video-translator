@@ -216,7 +216,7 @@ for i, seg in enumerate(segments):
         })
         failed_count += 1
 
-print(f"  配音生成完成！成功：{success_count}, 失败：{failed_count}", flush=True)
+print(f"\n  配音生成完成！成功：{success_count}, 失败：{failed_count}", flush=True)
 
 # Create metadata file for merging
 metadata = {
