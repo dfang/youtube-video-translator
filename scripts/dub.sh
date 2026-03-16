@@ -13,6 +13,10 @@ VOICE_NAME="${3:-}"
 
 cd "$WORK_DIR"
 
+# Create audio subdirectory for generated segments
+AUDIO_OUTPUT_DIR="$WORK_DIR/audio"
+mkdir -p "$AUDIO_OUTPUT_DIR"
+
 # Find subtitle files
 # First try to find English-only subtitle file (for bilingual mode)
 EN_SRT_FILE=$(find . -maxdepth 1 -name "*.en.only.srt" -type f | head -1)
@@ -173,9 +177,16 @@ success_count = 0
 
 print(f"  开始生成 {len(segments)} 条字幕配音...", flush=True)
 
+start_time = __import__('time').time()
+
 for i, seg in enumerate(segments):
-    seg_file = f"$BASE_NAME.seg.{i:03d}.mp3"
-    print(f"    生成 {i+1}/{len(segments)}...", flush=True)
+    seg_file = f"$AUDIO_OUTPUT_DIR/$BASE_NAME.seg.{i:03d}.mp3"
+    # Progress with percentage and ETA
+    elapsed = __import__('time').time() - start_time
+    avg_time = elapsed / (i + 1) if i > 0 else 0
+    remaining = (len(segments) - i - 1) * avg_time
+    progress = (i + 1) / len(segments) * 100
+    print(f"\r    生成 {i+1}/{len(segments)} ({progress:.1f}%) - 剩余 {remaining:.0f}s   ", end='', flush=True)
 
     text = seg['text']
     # Clean text - remove very short texts or special characters

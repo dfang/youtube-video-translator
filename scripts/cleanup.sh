@@ -34,10 +34,10 @@ PATTERNS=(
     "*.en.vtt"
     "*.zh-CN.srt"
     "*.voice-map.json"
-    "*.seg.*.mp3"
     "*.zh-CN.merged.mp3"
     "*.zh-CN.mp3"
     "concat_list.txt"
+    "subtitles.ass"
 )
 
 for pattern in "${PATTERNS[@]}"; do
@@ -48,6 +48,12 @@ for pattern in "${PATTERNS[@]}"; do
         fi
     done
 done
+
+# Remove audio subdirectory
+if [[ -d "audio" ]]; then
+    echo "    删除目录：audio/"
+    rm -rf audio/
+fi
 
 echo "  保留：$FINAL_FILE"
 echo "✅ 清理完成"
