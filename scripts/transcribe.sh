@@ -481,6 +481,7 @@ if [[ -n "$VTT_FILE" ]]; then
     fi
 
     SRT_FILE="$BASE_NAME.srt"
+    echo "  已加载英文字幕：$SRT_FILE"
 elif [[ -n "$SRT_FILE" ]]; then
     echo "  找到英文字幕（SRT 格式，无需转换）：$SRT_FILE"
     BASE_NAME="${SRT_FILE%.*}"
@@ -544,6 +545,33 @@ fi
 
 # Translate subtitles from English to target language
 echo "  翻译字幕为 $TARGET_LANG..."
+
+# 人工确认步骤：显示预览并询问
+EN_PREVIEW=$(head -n 20 "$SRT_FILE" 2>/dev/null || echo "无法读取文件")
+echo "--------------------------------------------------"
+echo "🔍 英文字幕预览 ($SRT_FILE):"
+echo "$EN_PREVIEW"
+echo "--------------------------------------------------"
+echo "❓ 英文字幕看起来是否有重复（如滚动高亮模式）？"
+echo "   [y] 继续翻译 (默认)"
+echo "   [e] 编辑字幕 (此时你可以手动修改 $WORK_DIR 目录下的文件)"
+echo "   [q] 退出脚本"
+read -p "请输入 [y/e/q]: " CONFIRM_CHOICE
+
+case "$CONFIRM_CHOICE" in
+    [qQ])
+        echo "🛑 用户选择退出。"
+        exit 0
+        ;;
+    [eE])
+        echo "📝 请在另一个终端或编辑器中修改：$WORK_DIR/$SRT_FILE"
+        read -p "修改完成后，请按回车键继续翻译..."
+        ;;
+    *)
+        echo "🚀 继续翻译..."
+        ;;
+esac
+
 if [[ "$SUBTITLE_TYPE" == "bilingual" ]]; then
     echo "  生成中英文双语字幕..."
 fi
