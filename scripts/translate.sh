@@ -28,8 +28,10 @@ VIDEO_URL=""
 CLEANUP=false
 TARGET_LANG="zh-CN"
 VOICE_LIBRARY=false
+TTS_ENGINE="edge-tts"  # default: edge-tts, option: piper-tts
 SUBTITLE_TYPE="chinese"  # default: chinese, option: bilingual
 SUBTITLE_SOURCE="download"  # default: download, option: whisper
+AUDIO_MODE="dub"  # default: dub (only dubbed audio), option: original (only original audio)
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -51,6 +53,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --subtitle-source)
             SUBTITLE_SOURCE="$2"
+            shift 2
+            ;;
+        --tts-engine)
+            TTS_ENGINE="$2"
+            shift 2
+            ;;
+        --audio-mode)
+            AUDIO_MODE="$2"
             shift 2
             ;;
         *)
@@ -91,7 +101,9 @@ echo "📁 工作目录：$WORK_DIR"
 echo "🌐 目标语言：$TARGET_LANG"
 echo "🎙️ 声音克隆：$([ "$VOICE_LIBRARY" = true ] && echo "使用预设声音" || echo "克隆原声")"
 echo "📝 字幕类型：$([ "$SUBTITLE_TYPE" = "bilingual" ] && echo "中英文双语" || echo "仅中文")"
-echo "📡 字幕来源：$([ "$SUBTITLE_SOURCE" = "whisper" ] && echo "Whisper 本地转录" || echo "下载英文字幕")"
+echo "📡 字幕来源：$( [ "$SUBTITLE_SOURCE" = "whisper" ] && echo "Whisper 本地转录" || ( [ "$SUBTITLE_SOURCE" = "whisperx" ] && echo "faster-whisper + whisperx 对齐" || echo "下载英文字幕" ))"
+echo "🔊 TTS 引擎：$TTS_ENGINE"
+echo "🎵 音频模式：$([ "$AUDIO_MODE" = "original" ] && echo "仅原音" || echo "仅配音")"
 echo ""
 
 # Create working directory
@@ -140,6 +152,8 @@ fi
 
 # Step 2: Extract/Translate subtitles
 print_status 2 5 "处理字幕" "running"
+# Set AUTO_CONFIRM to skip interactive prompts in transcribe.sh
+export AUTO_CONFIRM=true
 bash "$SCRIPT_DIR/transcribe.sh" "$WORK_DIR" "$TARGET_LANG" "$SUBTITLE_TYPE" "$SUBTITLE_SOURCE"
 if [[ $? -ne 0 ]]; then
     mark_step_fail 2 5 "处理字幕"
@@ -148,25 +162,29 @@ else
     mark_step_done 2 5 "处理字幕"
 fi
 
-# Step 3: Generate dubbed audio
-print_status 3 5 "生成中文配音" "running"
-# Pass empty string for VOICE_NAME when VOICE_LIBRARY is false (use default voice)
-VOICE_PARAM=""
-if [[ "$VOICE_LIBRARY" = true ]]; then
-    VOICE_PARAM="library"
-fi
-bash "$SCRIPT_DIR/dub.sh" "$WORK_DIR" "$TARGET_LANG" "$VOICE_PARAM"
-if [[ $? -ne 0 ]]; then
-    mark_step_fail 3 5 "生成中文配音"
-    echo "❌ 配音生成失败"
-    exit 1
+# Step 3: Generate dubbed audio (skip if original audio mode)
+if [[ "$AUDIO_MODE" != "original" ]]; then
+    print_status 3 5 "生成中文配音" "running"
+    # Pass empty string for VOICE_NAME when VOICE_LIBRARY is false (use default voice)
+    VOICE_PARAM=""
+    if [[ "$VOICE_LIBRARY" = true ]]; then
+        VOICE_PARAM="library"
+    fi
+    bash "$SCRIPT_DIR/dub.sh" "$WORK_DIR" "$TARGET_LANG" "$VOICE_PARAM" "$TTS_ENGINE"
+    if [[ $? -ne 0 ]]; then
+        mark_step_fail 3 5 "生成中文配音"
+        echo "❌ 配音生成失败"
+        exit 1
+    else
+        mark_step_done 3 5 "生成中文配音"
+    fi
 else
-    mark_step_done 3 5 "生成中文配音"
+    echo "⏭️ 跳过配音生成（仅原音模式）"
 fi
 
 # Step 4: Merge video and audio
 print_status 4 5 "合成视频" "running"
-bash "$SCRIPT_DIR/merge.sh" "$WORK_DIR" "$SUBTITLE_TYPE"
+bash "$SCRIPT_DIR/merge.sh" "$WORK_DIR" "$SUBTITLE_TYPE" "$AUDIO_MODE"
 if [[ $? -ne 0 ]]; then
     mark_step_fail 4 5 "合成视频"
     echo "❌ 视频合成失败"

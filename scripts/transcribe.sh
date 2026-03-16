@@ -298,11 +298,16 @@ CLEAN_EOF
 
 echo "  检测字幕文件..."
 
-# In bilingual mode, always regenerate subtitles to ensure Chinese-only output
-if [[ "$SUBTITLE_TYPE" == "bilingual" ]]; then
-    # Remove old subtitle files to force regeneration
+# In bilingual mode or whisperx mode, always regenerate subtitles to ensure clean output
+if [[ "$SUBTITLE_TYPE" == "bilingual" || "$SUBTITLE_SOURCE" == "whisperx" ]]; then
+    # Remove old Chinese subtitle files to force regeneration
+    # Don't remove *.en.srt in download mode as it's needed as source for translation
     rm -f *.zh-CN.srt *.en.only.srt 2>/dev/null || true
-    echo "  双语模式：已清理旧字幕文件，将重新生成"
+    if [[ "$SUBTITLE_SOURCE" == "whisperx" ]]; then
+        echo "  whisperx 模式：已清理旧字幕文件，将重新转录"
+    else
+        echo "  双语模式：已清理旧字幕文件，将重新生成"
+    fi
 fi
 
 # Priority 1: Check if Chinese subtitle already exists (zh-CN.srt)
@@ -477,7 +482,10 @@ SRT_FILE=$(find . -maxdepth 1 -name "*.en.srt" -type f | head -1)
 
 if [[ -n "$VTT_FILE" ]]; then
     echo "  找到英文字幕：$VTT_FILE"
-    BASE_NAME="${VTT_FILE%.*}"
+    # Get base name from video file to ensure correct output naming
+    VIDEO_BASE=$(find . -maxdepth 1 -name "*.original.mp4" -type f | head -1)
+    VIDEO_BASE="${VIDEO_BASE%.original.mp4}"
+    BASE_NAME="$VIDEO_BASE"
 
     # Convert VTT to SRT
     echo "  转换 VTT 为 SRT..."
@@ -491,7 +499,10 @@ if [[ -n "$VTT_FILE" ]]; then
     echo "  已加载英文字幕：$SRT_FILE"
 elif [[ -n "$SRT_FILE" ]]; then
     echo "  找到英文字幕（SRT 格式，无需转换）：$SRT_FILE"
-    BASE_NAME="${SRT_FILE%.*}"
+    # Get base name from video file to ensure correct output naming
+    VIDEO_BASE=$(find . -maxdepth 1 -name "*.original.mp4" -type f | head -1)
+    VIDEO_BASE="${VIDEO_BASE%.original.mp4}"
+    BASE_NAME="$VIDEO_BASE"
 else
     echo "  未找到字幕文件，需要自动转录"
 
@@ -568,16 +579,24 @@ fi
 echo "  翻译字幕为 $TARGET_LANG..."
 
 # 人工确认步骤：显示预览并询问
+# 检测是否为交互模式，非交互模式自动跳过确认
 EN_PREVIEW=$(head -n 20 "$SRT_FILE" 2>/dev/null || echo "无法读取文件")
 echo "--------------------------------------------------"
 echo "🔍 英文字幕预览 ($SRT_FILE):"
 echo "$EN_PREVIEW"
 echo "--------------------------------------------------"
-echo "❓ 英文字幕看起来是否有重复（如滚动高亮模式）？"
-echo "   [y] 继续翻译 (默认)"
-echo "   [e] 编辑字幕 (此时你可以手动修改 $WORK_DIR 目录下的文件)"
-echo "   [q] 退出脚本"
-read -p "请输入 [y/e/q]: " CONFIRM_CHOICE
+
+# 检查是否为非交互模式（通过环境变量或 test -t 0）
+if [[ -n "$AUTO_CONFIRM" ]] || [[ ! -t 0 ]]; then
+    echo "⚡ 非交互模式，自动继续翻译..."
+    CONFIRM_CHOICE="y"
+else
+    echo "❓ 英文字幕看起来是否有重复（如滚动高亮模式）？"
+    echo "   [y] 继续翻译 (默认)"
+    echo "   [e] 编辑字幕 (此时你可以手动修改 $WORK_DIR 目录下的文件)"
+    echo "   [q] 退出脚本"
+    read -p "请输入 [y/e/q]: " CONFIRM_CHOICE
+fi
 
 case "$CONFIRM_CHOICE" in
     [qQ])

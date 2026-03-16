@@ -1,12 +1,14 @@
 #!/bin/bash
-# Merge video and dubbed audio
-# Usage: ./merge.sh <WORK_DIR> [SUBTITLE_TYPE]
+# Merge video and audio
+# Usage: ./merge.sh <WORK_DIR> [SUBTITLE_TYPE] [AUDIO_MODE]
 # SUBTITLE_TYPE: chinese (default) or bilingual
+# AUDIO_MODE: dub (default, use dubbed audio) or original (use original audio)
 
 set -e
 
 WORK_DIR="$1"
 SUBTITLE_TYPE="${2:-chinese}"  # chinese or bilingual
+AUDIO_MODE="${3:-dub}"  # dub or original
 
 cd "$WORK_DIR"
 
@@ -26,62 +28,96 @@ fi
 
 BASE_NAME="${SRT_FILE%.zh-CN.srt}"
 
-# Find voice-map for Chinese dubbing (prefer non-.en version)
-VOICE_MAP=$(find . -maxdepth 1 -name "*.voice-map.json" -type f | grep -v '\.en\.voice-map\.json' | head -1)
+# Find voice-map for Chinese dubbing (only needed in dub mode)
+VOICE_MAP=""
+if [ "$AUDIO_MODE" != "original" ]; then
+    VOICE_MAP=$(find . -maxdepth 1 -name "*.voice-map.json" -type f | grep -v '\.en\.voice-map\.json' | head -1)
 
-if [[ -z "$VOICE_MAP" ]]; then
-    # Fallback to any voice-map
-    VOICE_MAP=$(find . -maxdepth 1 -name "*.voice-map.json" -type f | head -1)
+    if [[ -z "$VOICE_MAP" ]]; then
+        # Fallback to any voice-map
+        VOICE_MAP=$(find . -maxdepth 1 -name "*.voice-map.json" -type f | head -1)
+    fi
+
+    if [[ -z "$VOICE_MAP" ]]; then
+        echo "❌ 未找到配音元数据"
+        exit 1
+    fi
+
+    echo "  视频文件：$VIDEO_FILE"
+    echo "  配音元数据：$VOICE_MAP"
+else
+    echo "  视频文件：$VIDEO_FILE"
+    echo "  模式：仅原音（不需要配音元数据）"
 fi
-
-if [[ -z "$VOICE_MAP" ]]; then
-    echo "❌ 未找到配音元数据"
-    exit 1
-fi
-
-echo "  视频文件：$VIDEO_FILE"
-echo "  配音元数据：$VOICE_MAP"
 
 # Merge audio segments and sync with video
 echo "  合并音频并合成视频..."
+if [ "$AUDIO_MODE" = "original" ]; then
+    echo "  模式：仅原音（保留原始音频）"
+else
+    echo "  模式：仅配音"
+fi
 python3 << EOF
 import json
 import subprocess
 import os
 
-# Load metadata
-with open("$VOICE_MAP", 'r') as f:
-    metadata = json.load(f)
+AUDIO_MODE = "$AUDIO_MODE"
+VOICE_MAP = "$VOICE_MAP" if "$VOICE_MAP" else None
 
-segments = metadata['segments']
-
-# Create concat file for ffmpeg
-concat_file = "concat_list.txt"
-with open(concat_file, 'w') as f:
-    for seg in segments:
-        if seg['file'] and os.path.exists(seg['file']):
-            f.write(f"file '{seg['file']}'\n")
-
-# Merge audio segments
-if os.path.exists(concat_file):
-    print("    合并音频片段...")
+# For original audio mode, just copy original audio
+if AUDIO_MODE == "original":
+    print("    复制原音轨道...")
+    # Extract original audio
     subprocess.run([
         'ffmpeg', '-y',
-        '-f', 'concat',
-        '-safe', '0',
-        '-i', concat_file,
-        '-c', 'copy',
-        f"$BASE_NAME.zh-CN.merged.mp3"
+        '-i', "$VIDEO_FILE",
+        '-c:a', 'aac',
+        '-vn',
+        f"$BASE_NAME.original.audio.m4a"
     ], check=True, capture_output=True)
+    audio_file = f"$BASE_NAME.original.audio.m4a"
 else:
-    print("    警告：无有效音频片段")
+    # Load metadata for dubbed audio
+    if not VOICE_MAP:
+        print("    错误：缺少配音元数据")
+        exit(1)
 
-# Merge video with dubbed audio
+    with open(VOICE_MAP, 'r') as f:
+        metadata = json.load(f)
+
+    segments = metadata['segments']
+
+    # Merge dubbed audio segments
+    # Create concat file for ffmpeg
+    concat_file = "concat_list.txt"
+    with open(concat_file, 'w') as f:
+        for seg in segments:
+            if seg['file'] and os.path.exists(seg['file']):
+                f.write(f"file '{seg['file']}'\\n")
+
+    # Merge audio segments
+    if os.path.exists(concat_file):
+        print("    合并音频片段...")
+        subprocess.run([
+            'ffmpeg', '-y',
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', concat_file,
+            '-c', 'copy',
+            f"$BASE_NAME.zh-CN.merged.mp3"
+        ], check=True, capture_output=True)
+    else:
+        print("    警告：无有效音频片段")
+
+    audio_file = f"$BASE_NAME.zh-CN.merged.mp3"
+
+# Merge video with audio
 print("    合成最终视频...")
 subprocess.run([
     'ffmpeg', '-y',
     '-i', "$VIDEO_FILE",
-    '-i', f"$BASE_NAME.zh-CN.merged.mp3",
+    '-i', audio_file,
     '-c:v', 'copy',
     '-c:a', 'aac',
     '-map', '0:v:0',
@@ -269,8 +305,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     except Exception as e:
         print(f"    硬烧失败：{e}")
 
-# Cleanup temp files
-if os.path.exists(concat_file):
+# Cleanup temp files (only in dub mode)
+if AUDIO_MODE != "original" and os.path.exists(concat_file):
     os.remove(concat_file)
 
 print(f"  最终文件：$BASE_NAME.zh-CN.final.mp4")
