@@ -224,9 +224,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 start = ms_to_ass_time(time_to_ms(block['start']))
                 end = ms_to_ass_time(time_to_ms(block['end']))
                 # Escape ASS special characters
-                cn_text = block['cn'].replace('\\', '\\\\').replace('{', '\\{').replace('}', '\\}')
-                en_text = block['en'].replace('\\', '\\\\').replace('{', '\\{').replace('}', '\\}')
-                f.write(f"Dialogue: 0,{start},{end},Chinese,,0,0,0,,{{\\an8}}{cn_text}\\N{{\\fs32}}{en_text}\n")
+                cn_text = block['cn'].replace(chr(92), chr(92)+chr(92)).replace('{', chr(92)+'{').replace('}', chr(92)+'}')
+                en_text = block['en'].replace(chr(92), chr(92)+chr(92)).replace('{', chr(92)+'{').replace('}', chr(92)+'}')
+                # Build ASS dialogue line with proper escaping
+                ass_style_open = r"{\an8}"
+                ass_style_font = r"{\fs32}"
+                ass_newline = r"\N"
+                f.write(f"Dialogue: 0,{start},{end},Chinese,,0,0,0,,{ass_style_open}{cn_text}{ass_newline}{ass_style_font}{en_text}\n")
         else:
             print(f"    生成中文 ASS 字幕：{len(blocks)} 条")
             for block in blocks:
@@ -235,8 +239,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                     start, end = time_match.groups()
                     start = ms_to_ass_time(time_to_ms(start))
                     end = ms_to_ass_time(time_to_ms(end))
-                    cn_text = ' '.join(block['text']).replace('\\', '\\\\').replace('{', '\\{').replace('}', '\\}')
-                    f.write(f"Dialogue: 0,{start},{end},Chinese,,0,0,0,,{{\\an8}}{cn_text}\n")
+                    cn_text = ' '.join(block['text']).replace(chr(92), chr(92)+chr(92)).replace('{', chr(92)+'{').replace('}', chr(92)+'}')
+                    # Build ASS dialogue line with proper escaping
+                    ass_style_open = r"{\an8}"
+                    f.write(f"Dialogue: 0,{start},{end},Chinese,,0,0,0,,{ass_style_open}{cn_text}\n")
 
     print("    ASS 字幕文件已创建：subtitles.ass")
 
