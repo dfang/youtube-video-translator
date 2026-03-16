@@ -30,7 +30,7 @@
 
 ### 3. 配音生成模块 (dub.sh)
 
-- **声音克隆**：使用 ElevenLabs Instant Voice Cloning 克隆原视频人物声音
+- **edge-tts TTS**: 使用 Microsoft Edge TTS 生成高质量配音
 - **分段生成**：按字幕时间轴逐句生成 TTS 音频
 - **语速匹配**：自动匹配原视频语速和停顿
 - **元数据记录**：生成 voice-map.json 记录每个音频片段的时间信息
@@ -49,11 +49,12 @@
 
 ## 特色功能
 
-### 🎙️ 声音克隆
+### 🎙️ edge-tts TTS
 
-- 优先克隆原视频人物声音，保持配音自然度
-- 使用 ElevenLabs 多语言模型 (eleven_multilingual_v2)
-- 支持使用预设声音库（`--voice-library` 参数）
+- 免费无需 API 密钥
+- 无速率限制，快速生成
+- 支持 30+ 语言的高质量语音
+- 本地生成，隐私安全
 
 ### ⚡ MPS 加速
 
@@ -90,9 +91,6 @@
 # 指定目标语言（默认中文）
 /yt-translate <URL> --lang ja  # 翻译成日语
 
-# 使用预设声音而非克隆
-/yt-translate <URL> --voice-library
-
 # 字幕类型：仅中文（默认）或中英文双语
 /yt-translate <URL> --subtitles chinese      # 仅中文字幕（默认）
 /yt-translate <URL> --subtitles bilingual    # 中英文双语字幕
@@ -100,9 +98,7 @@
 
 ## 环境变量
 
-| 变量名               | 说明                        |
-| -------------------- | --------------------------- |
-| `ELEVENLABS_API_KEY` | ElevenLabs API 密钥（必需） |
+无需 API 密钥，edge-tts 完全免费使用。
 
 ## 输出文件
 
@@ -126,20 +122,27 @@
 
 - `yt-dlp` - YouTube 视频下载
 - `ffmpeg` - 视频/音频处理
+- `HandBrakeCLI` - 硬烧字幕（可选）
 - Python 3.10+
-- ElevenLabs API
-- Python 包：`elevenlabs`, `requests`
+- Python 包：`edge-tts`, `requests`
 
 ## 配置参数 (config/default.json)
 
 ```json
 {
-  "elevenlabs": {
-    "model": "eleven_multilingual_v2",
-    "stability": 0.5,
-    "similarity_boost": 0.75,
-    "style": 0.0,
-    "use_speaker_boost": true
+  "edge-tts": {
+    "default_voice": "zh-CN-XiaoxiaoNeural",
+    "voice_mapping": {
+      "zh-CN": "zh-CN-XiaoxiaoNeural",
+      "zh-HK": "zh-HK-HiuMaanNeural",
+      "zh-TW": "zh-TW-HsiaoChenNeural",
+      "ja": "ja-JP-NanamiNeural",
+      "ko": "ko-KR-SunHiNeural",
+      "en": "en-US-JennyNeural",
+      "es": "es-ES-ElviraNeural",
+      "fr": "fr-FR-DeniseNeural",
+      "de": "de-DE-KatjaNeural"
+    }
   },
   "translation": {
     "target_language": "zh-CN",
@@ -163,12 +166,13 @@
 
 ## 技术细节
 
-### 声音克隆流程
+### edge-tts TTS 生成
 
-1. 从原视频提取 1-3 分钟音频片段
-2. 发送到 ElevenLabs Instant Voice Cloning API
-3. 获取克隆声音的 voice_id
-4. 使用该 voice_id 逐句生成 TTS
+1. 解析 SRT 字幕文件获取时间轴和文本
+2. 按目标语言选择预设语音（如 zh-CN-XiaoxiaoNeural）
+3. 调用 edge-tts CLI 逐句生成音频片段
+4. 生成 voice-map.json 记录片段映射
+5. 使用 ffmpeg 合并所有音频片段
 
 ### 字幕翻译
 
