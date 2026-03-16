@@ -27,6 +27,9 @@
 - 使用 Google Translate API 逐句翻译字幕
 - 保留原字幕时间轴
 - 输出双语 SRT 字幕文件
+- **字幕来源选项**：
+  - `download`（默认）：下载 YouTube 英文字幕，使用 yt-dlp 下载原始字幕（无逐词高亮）
+  - `whisper`：使用 Whisper/faster-whisper 本地转录（无高亮，时间轴干净，质量更高）
 
 ### 3. 配音生成模块 (dub.sh)
 
@@ -94,6 +97,19 @@
 # 字幕类型：仅中文（默认）或中英文双语
 /yt-translate <URL> --subtitles chinese      # 仅中文字幕（默认）
 /yt-translate <URL> --subtitles bilingual    # 中英文双语字幕
+
+# 字幕来源：下载英文字幕（默认）或使用 Whisper 本地转录
+/yt-translate <URL> --subtitle-source download   # 下载 YouTube 英文字幕（默认，无逐词高亮）
+/yt-translate <URL> --subtitle-source whisper    # 使用 Whisper 重新生成字幕（质量更高，时间轴干净）
+```
+
+Whisper 模式需要先安装：
+```bash
+# 标准 Whisper（较慢）
+pip install openai-whisper
+
+# Faster-Whisper（推荐，速度更快）
+pip install faster-whisper
 ```
 
 ## 环境变量

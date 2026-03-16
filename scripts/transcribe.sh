@@ -1,13 +1,15 @@
 #!/bin/bash
 # Transcribe/Translate subtitles
-# Usage: ./transcribe.sh <WORK_DIR> <TARGET_LANG> <SUBTITLE_TYPE>
+# Usage: ./transcribe.sh <WORK_DIR> <TARGET_LANG> <SUBTITLE_TYPE> <SUBTITLE_SOURCE>
 # SUBTITLE_TYPE: chinese (default) or bilingual
+# SUBTITLE_SOURCE: download (default) or whisper
 
 set -e
 
 WORK_DIR="$1"
 TARGET_LANG="${2:-zh-CN}"
 SUBTITLE_TYPE="${3:-chinese}"  # chinese or bilingual
+SUBTITLE_SOURCE="${4:-download}"  # download or whisper
 
 cd "$WORK_DIR"
 
@@ -337,7 +339,9 @@ if [[ -n "$ZH_HANS_VTT" ]]; then
     # Get base name from video file
     VIDEO_BASE=$(find . -maxdepth 1 -name "*.original.mp4" -type f | head -1)
     VIDEO_BASE="${VIDEO_BASE%.original.mp4}"
-    copy_chinese_subtitle "$ZH_HANS_VTT" "$VIDEO_BASE.zh-CN.srt"
+    # Use dedup_subtitle.py to clean YouTube highlight-style subtitles
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    python3 "$SCRIPT_DIR/dedup_subtitle.py" "$ZH_HANS_VTT" "$VIDEO_BASE.zh-CN.srt"
 
     # If bilingual mode, also need to prepare English subtitle for TTS
     if [[ "$SUBTITLE_TYPE" == "bilingual" ]]; then
@@ -480,8 +484,60 @@ elif [[ -n "$SRT_FILE" ]]; then
     BASE_NAME="${SRT_FILE%.*}"
 else
     echo "  未找到字幕文件，需要自动转录"
-    echo "  请安装 whisper 或手动提供字幕"
-    exit 1
+
+    # Check if whisper mode is enabled
+    if [[ "$SUBTITLE_SOURCE" == "whisper" ]]; then
+        echo "  使用 Whisper 进行本地转录..."
+        VIDEO_FILE=$(find . -maxdepth 1 -name "*.original.mp4" -type f | head -1)
+        if [[ -z "$VIDEO_FILE" ]]; then
+            echo "  ❌ 未找到视频文件"
+            exit 1
+        fi
+
+        # Get base name from video
+        VIDEO_BASE="${VIDEO_FILE%.original.mp4}"
+
+        # Try faster-whisper first (much faster), then fall back to whisper
+        if command -v faster-whisper &> /dev/null; then
+            echo "  使用 faster-whisper 进行转录（速度更快）..."
+            faster-whisper "$VIDEO_FILE" --model medium --output_dir . --output_format srt --language en
+            if [[ -f "${VIDEO_BASE}.srt" ]]; then
+                mv "${VIDEO_BASE}.srt" "$VIDEO_BASE.en.srt"
+            fi
+        elif command -v whisper &> /dev/null; then
+            echo "  使用 Whisper 进行转录（这可能需要几分钟）..."
+            whisper "$VIDEO_FILE" --model base --output_dir . --output_format srt --language en
+        else
+            echo "  ❌ 未找到 whisper 或 faster-whisper 命令"
+            echo "  请安装："
+            echo "    pip install openai-whisper"
+            echo "    或 pip install faster-whisper（推荐，速度更快）"
+            exit 1
+        fi
+
+        # Rename output file
+        if [[ -f "video.srt" ]]; then
+            mv "video.srt" "$VIDEO_BASE.en.srt"
+            echo "  已保存英文字幕：$VIDEO_BASE.en.srt"
+        elif [[ -f "${VIDEO_FILE}.srt" ]]; then
+            mv "${VIDEO_FILE}.srt" "$VIDEO_BASE.en.srt"
+            echo "  已保存英文字幕：$VIDEO_BASE.en.srt"
+        elif [[ -f "$VIDEO_BASE.en.srt" ]]; then
+            echo "  已保存英文字幕：$VIDEO_BASE.en.srt"
+        else
+            echo "  ❌ Whisper 转录失败，未生成字幕文件"
+            exit 1
+        fi
+
+        # Set SRT_FILE for translation step
+        SRT_FILE="$VIDEO_BASE.en.srt"
+        BASE_NAME="$VIDEO_BASE"
+        echo "  ✅ Whisper 转录完成（无高亮字幕，时间轴干净）"
+    else
+        echo "  请安装 whisper 或手动提供字幕"
+        echo "  使用 --subtitle-source=whisper 参数可使用 Whisper 本地转录"
+        exit 1
+    fi
 fi
 
 # Translate subtitles from English to target language

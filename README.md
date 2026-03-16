@@ -74,6 +74,24 @@ pip3 install edge-tts
 /yt-translate <URL> --subtitles bilingual
 ```
 
+### 选择字幕来源
+```
+# 下载 YouTube 英文字幕（默认，无逐词高亮）
+/yt-translate <URL> --subtitle-source download
+
+# 使用 Whisper 重新生成字幕（质量更高，时间轴干净）
+/yt-translate <URL> --subtitle-source whisper
+```
+
+Whisper 模式需要先安装：
+```bash
+# 标准 Whisper（较慢）
+pip install openai-whisper
+
+# Faster-Whisper（推荐，速度更快）
+pip install faster-whisper
+```
+
 ### 组合多个参数
 ```
 /yt-translate <URL> --subtitles bilingual --cleanup --lang zh-CN
@@ -89,8 +107,10 @@ pip3 install edge-tts
 5. 使用 ffmpeg 合并所有音频片段
 
 ### 字幕处理
-- 优先下载 YouTube 自动/手动字幕
-- 无字幕时使用 Whisper 自动转录
+- 字幕来源选项：
+  - `download`（默认）：下载 YouTube 英文字幕，使用 yt-dlp 下载原始字幕（无逐词高亮）
+  - `whisper`：使用 Whisper/faster-whisper 本地转录（无高亮，时间轴干净，质量更高）
+- 自动检测并转换字幕格式（VTT → SRT）
 - 长字幕自动切分（每段<4000 字符）
 - Google Translate API 翻译
 

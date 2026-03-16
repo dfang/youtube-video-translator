@@ -29,6 +29,7 @@ CLEANUP=false
 TARGET_LANG="zh-CN"
 VOICE_LIBRARY=false
 SUBTITLE_TYPE="chinese"  # default: chinese, option: bilingual
+SUBTITLE_SOURCE="download"  # default: download, option: whisper
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -46,6 +47,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --subtitles)
             SUBTITLE_TYPE="$2"
+            shift 2
+            ;;
+        --subtitle-source)
+            SUBTITLE_SOURCE="$2"
             shift 2
             ;;
         *)
@@ -86,6 +91,7 @@ echo "📁 工作目录：$WORK_DIR"
 echo "🌐 目标语言：$TARGET_LANG"
 echo "🎙️ 声音克隆：$([ "$VOICE_LIBRARY" = true ] && echo "使用预设声音" || echo "克隆原声")"
 echo "📝 字幕类型：$([ "$SUBTITLE_TYPE" = "bilingual" ] && echo "中英文双语" || echo "仅中文")"
+echo "📡 字幕来源：$([ "$SUBTITLE_SOURCE" = "whisper" ] && echo "Whisper 本地转录" || echo "下载英文字幕")"
 echo ""
 
 # Create working directory
@@ -94,14 +100,14 @@ cd "$WORK_DIR"
 
 # Step 1: Download video and subtitles
 echo "📥 步骤 1/5: 下载视频和字幕..."
-bash "$SCRIPT_DIR/download.sh" "$VIDEO_URL" "$TARGET_LANG"
+bash "$SCRIPT_DIR/download.sh" "$VIDEO_URL" "$TARGET_LANG" "$SUBTITLE_SOURCE"
 if [[ $? -ne 0 ]]; then
     echo "⚠️ 下载失败，尝试继续..."
 fi
 
 # Step 2: Extract/Translate subtitles
 echo "📝 步骤 2/5: 处理字幕..."
-bash "$SCRIPT_DIR/transcribe.sh" "$WORK_DIR" "$TARGET_LANG" "$SUBTITLE_TYPE"
+bash "$SCRIPT_DIR/transcribe.sh" "$WORK_DIR" "$TARGET_LANG" "$SUBTITLE_TYPE" "$SUBTITLE_SOURCE"
 if [[ $? -ne 0 ]]; then
     echo "⚠️ 字幕处理失败，尝试继续..."
 fi
