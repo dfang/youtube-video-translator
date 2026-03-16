@@ -2,14 +2,14 @@
 # Transcribe/Translate subtitles
 # Usage: ./transcribe.sh <WORK_DIR> <TARGET_LANG> <SUBTITLE_TYPE> <SUBTITLE_SOURCE>
 # SUBTITLE_TYPE: chinese (default) or bilingual
-# SUBTITLE_SOURCE: download (default) or whisper
+# SUBTITLE_SOURCE: download (default), whisper, or whisperx
 
 set -e
 
 WORK_DIR="$1"
 TARGET_LANG="${2:-zh-CN}"
 SUBTITLE_TYPE="${3:-chinese}"  # chinese or bilingual
-SUBTITLE_SOURCE="${4:-download}"  # download or whisper
+SUBTITLE_SOURCE="${4:-download}"  # download, whisper, or whisperx
 
 cd "$WORK_DIR"
 
@@ -298,6 +298,13 @@ CLEAN_EOF
 
 echo "  检测字幕文件..."
 
+# In bilingual mode, always regenerate subtitles to ensure Chinese-only output
+if [[ "$SUBTITLE_TYPE" == "bilingual" ]]; then
+    # Remove old subtitle files to force regeneration
+    rm -f *.zh-CN.srt *.en.only.srt 2>/dev/null || true
+    echo "  双语模式：已清理旧字幕文件，将重新生成"
+fi
+
 # Priority 1: Check if Chinese subtitle already exists (zh-CN.srt)
 CHINESE_SRT=$(find . -maxdepth 1 -name "*.zh-CN.srt" -type f | head -1)
 if [[ -n "$CHINESE_SRT" ]]; then
@@ -489,8 +496,7 @@ else
     echo "  未找到字幕文件，需要自动转录"
 
     # Check if whisper mode is enabled
-    if [[ "$SUBTITLE_SOURCE" == "whisper" ]]; then
-        echo "  使用 Whisper 进行本地转录..."
+    if [[ "$SUBTITLE_SOURCE" == "whisper" || "$SUBTITLE_SOURCE" == "whisperx" ]]; then
         VIDEO_FILE=$(find . -maxdepth 1 -name "*.original.mp4" -type f | head -1)
         if [[ -z "$VIDEO_FILE" ]]; then
             echo "  ❌ 未找到视频文件"
@@ -500,8 +506,12 @@ else
         # Get base name from video
         VIDEO_BASE="${VIDEO_FILE%.original.mp4}"
 
-        # Try faster-whisper first (much faster), then fall back to whisper
-        if command -v faster-whisper &> /dev/null; then
+        if [[ "$SUBTITLE_SOURCE" == "whisperx" ]]; then
+            # Use faster-whisper + whisperx alignment
+            echo "  使用 faster-whisper + whisperx 进行转录和对齐..."
+            SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+            bash "$SCRIPT_DIR/whisperx-transcribe.sh" "$WORK_DIR" "en"
+        elif command -v faster-whisper &> /dev/null; then
             echo "  使用 faster-whisper 进行转录（速度更快）..."
             faster-whisper "$VIDEO_FILE" --model medium --output_dir . --output_format srt --language en
             if [[ -f "${VIDEO_BASE}.srt" ]]; then
@@ -515,27 +525,38 @@ else
             echo "  请安装："
             echo "    pip install openai-whisper"
             echo "    或 pip install faster-whisper（推荐，速度更快）"
+            echo "    或 pip install whisperx（最佳质量，单词级对齐）"
             exit 1
         fi
 
-        # Rename output file
-        if [[ -f "video.srt" ]]; then
-            mv "video.srt" "$VIDEO_BASE.en.srt"
-            echo "  已保存英文字幕：$VIDEO_BASE.en.srt"
-        elif [[ -f "${VIDEO_FILE}.srt" ]]; then
-            mv "${VIDEO_FILE}.srt" "$VIDEO_BASE.en.srt"
-            echo "  已保存英文字幕：$VIDEO_BASE.en.srt"
-        elif [[ -f "$VIDEO_BASE.en.srt" ]]; then
-            echo "  已保存英文字幕：$VIDEO_BASE.en.srt"
-        else
-            echo "  ❌ Whisper 转录失败，未生成字幕文件"
-            exit 1
+        # Rename output file for whisper mode (whisperx handles its own output)
+        if [[ "$SUBTITLE_SOURCE" != "whisperx" ]]; then
+            # Rename output file - Whisper may output to different locations
+            if [[ -f "video.srt" ]]; then
+                mv "video.srt" "$VIDEO_BASE.en.srt"
+                echo "  已保存英文字幕：$VIDEO_BASE.en.srt"
+            elif [[ -f "${VIDEO_BASE}.original.srt" ]]; then
+                mv "${VIDEO_BASE}.original.srt" "$VIDEO_BASE.en.srt"
+                echo "  已保存英文字幕：$VIDEO_BASE.en.srt"
+            elif [[ -f "${VIDEO_BASE}.srt" ]]; then
+                mv "${VIDEO_BASE}.srt" "$VIDEO_BASE.en.srt"
+                echo "  已保存英文字幕：$VIDEO_BASE.en.srt"
+            elif [[ -f "$VIDEO_BASE.en.srt" ]]; then
+                echo "  已保存英文字幕：$VIDEO_BASE.en.srt"
+            else
+                echo "  ❌ Whisper 转录失败，未生成字幕文件"
+                exit 1
+            fi
         fi
 
         # Set SRT_FILE for translation step
         SRT_FILE="$VIDEO_BASE.en.srt"
         BASE_NAME="$VIDEO_BASE"
-        echo "  ✅ Whisper 转录完成（无高亮字幕，时间轴干净）"
+        if [[ "$SUBTITLE_SOURCE" == "whisperx" ]]; then
+            echo "  ✅ WhisperX 转录完成（单词级对齐，时间轴精确）"
+        else
+            echo "  ✅ Whisper 转录完成（无高亮字幕，时间轴干净）"
+        fi
     else
         echo "  请安装 whisper 或手动提供字幕"
         echo "  使用 --subtitle-source=whisper 参数可使用 Whisper 本地转录"
@@ -594,9 +615,19 @@ def translate_text(text, target_lang="zh-CN"):
         response = requests.get(url, params=params, timeout=10)
         result = response.json()
 
-        # Extract translation from nested structure
-        translation = ''.join([sentence[0] for sentence in result[0] if sentence[0]])
-        return translation
+        # Result structure: [[translation1, source_lang], [translation2, source_lang], ...]
+        # Or: [[translation1], [translation2], ...]
+        if isinstance(result, list) and len(result) > 0:
+            translation_parts = []
+            for item in result:
+                if isinstance(item, list) and len(item) > 0:
+                    # First element is the translation
+                    translation_parts.append(item[0])
+            if translation_parts:
+                return ''.join(translation_parts)
+
+        # Fallback: return original text
+        return text
     except Exception as e:
         print(f"    翻译失败：{e}")
         return text
@@ -665,13 +696,9 @@ for i, block in enumerate(blocks):
     print(f"    翻译 {i+1}/{len(blocks)} ({progress:.1f}%) - 剩余 {remaining:.0f}s   ", end='\r', flush=True)
     translated_text = translate_text(original_text, "$TARGET_LANG")
 
-    # Update block
-    if "$SUBTITLE_TYPE" == "bilingual":
-        # For bilingual: put Chinese first, then English in parentheses
-        block['text'] = [translated_text, original_text]
-    else:
-        # Chinese only
-        block['text'] = [translated_text]
+    # Update block - always store Chinese-only for TTS compatibility
+    # Bilingual display will be handled by merge.sh when creating ASS subtitles
+    block['text'] = [translated_text]
     translated_blocks.append(block)
 
     # Rate limiting

@@ -18,20 +18,23 @@ AUDIO_OUTPUT_DIR="$WORK_DIR/audio"
 mkdir -p "$AUDIO_OUTPUT_DIR"
 
 # Find subtitle files
-# First try to find English-only subtitle file (for bilingual mode)
-EN_SRT_FILE=$(find . -maxdepth 1 -name "*.en.only.srt" -type f | head -1)
+# Priority 1: English-only subtitle file (for bilingual mode TTS generation)
+SRT_FILE=$(find . -maxdepth 1 -name "*.en.only.srt" -type f | head -1)
 
-# If no English-only file, use original English subtitle
-if [[ -z "$EN_SRT_FILE" ]]; then
-    EN_SRT_FILE=$(find . -maxdepth 1 -name "*.en.srt" -type f | head -1)
+# Priority 2: Original English subtitle
+if [[ -z "$SRT_FILE" ]]; then
+    SRT_FILE=$(find . -maxdepth 1 -name "*.en.srt" -type f | head -1)
 fi
 
-# Target language subtitle for output naming
-TARGET_SRT_FILE=$(find . -maxdepth 1 -name "*.$TARGET_LANG.srt" -type f | head -1)
+# Priority 3: Target language subtitle (fallback - but skip files with bilingual content)
+if [[ -z "$SRT_FILE" ]]; then
+    SRT_FILE=$(find . -maxdepth 1 -name "*.$TARGET_LANG.srt" -type f | head -1)
+fi
+
 AUDIO_FILE=$(find . -maxdepth 1 -name "*.audio.mp3" -type f | head -1)
 
-if [[ -z "$TARGET_SRT_FILE" ]]; then
-    echo "❌ 未找到中文字幕文件"
+if [[ -z "$SRT_FILE" ]]; then
+    echo "❌ 未找到字幕文件"
     exit 1
 fi
 
@@ -40,12 +43,13 @@ if [[ -z "$AUDIO_FILE" ]]; then
     exit 1
 fi
 
-# Use Chinese subtitle for TTS generation (edge-tts supports Chinese natively)
-SRT_FILE="$TARGET_SRT_FILE"
 echo "  使用字幕文件：$SRT_FILE"
 echo "  参考音频：$AUDIO_FILE"
 
-BASE_NAME="${TARGET_SRT_FILE%.*}"
+BASE_NAME="${SRT_FILE%.*}"
+# Remove language suffix to get base name
+BASE_NAME="${BASE_NAME%.en.only}"
+BASE_NAME="${BASE_NAME%.en}"
 BASE_NAME="${BASE_NAME%.$TARGET_LANG}"
 
 # Determine voice based on target language

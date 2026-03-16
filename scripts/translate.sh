@@ -130,7 +130,7 @@ mark_step_fail() {
 
 # Step 1: Download video and subtitles
 print_status 1 5 "下载视频和字幕" "running"
-bash "$SCRIPT_DIR/download.sh" "$VIDEO_URL" "$TARGET_LANG" "$SUBTITLE_SOURCE"
+bash "$SCRIPT_DIR/download.sh" "$VIDEO_URL" "$TARGET_LANG" "$SUBTITLE_SOURCE" "$WORK_DIR"
 if [[ $? -ne 0 ]]; then
     mark_step_fail 1 5 "下载视频和字幕"
     echo "⚠️ 下载失败，尝试继续..."
