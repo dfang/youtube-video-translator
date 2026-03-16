@@ -1,6 +1,6 @@
 # YouTube Video Translator Skill
 
-专业级 YouTube 视频翻译工具，专为 Mac Mini M4 优化。
+专业级 YouTube 视频翻译工具，使用 edge-tts 生成免费高质量配音。
 
 ## 安装
 
@@ -11,23 +11,20 @@
 # 安装 Python 依赖
 pip3 install -r requirements.txt
 
-# 设置环境变量
-export ELEVENLABS_API_KEY="your_api_key_here"
+# 无需 API 密钥 - edge-tts 完全免费使用
 ```
 
 ## 快速开始
 
-### 1. 配置 API Key
+### 1. 安装依赖
 
-在终端执行：
 ```bash
-export ELEVENLABS_API_KEY="你的 ElevenLabs API 密钥"
+pip3 install -r requirements.txt
 ```
 
-或添加到 `~/.zshrc`：
+确保已安装 `edge-tts`：
 ```bash
-echo 'export ELEVENLABS_API_KEY="your_key"' >> ~/.zshrc
-source ~/.zshrc
+pip3 install edge-tts
 ```
 
 ### 2. 使用技能
@@ -44,11 +41,11 @@ source ~/.zshrc
 ```
 ✅ 视频翻译完成！
 
-最终文件：VIDEO_TITLE.zh-CN.final.mp4 (15.2MB)
-- 🎬 1920x1080 视频
-- 🎙️ 中文配音（克隆原声）
+最终文件：VIDEO_TITLE.zh-CN.final.mp4 (63.0MB)
+- 🎬 1280x556 视频
+- 🎙️ 中文配音（edge-tts）
 - 📝 硬烧字幕（中文字幕或中英文双语）
-- ⏱️ 时长 3:24
+- ⏱️ 时长 19:15
 
 中间文件已保留在工作区。
 使用 --cleanup 参数可清理中间文件。
@@ -61,11 +58,6 @@ source ~/.zshrc
 ### 清理中间文件
 ```
 /yt-translate <URL> --cleanup
-```
-
-### 使用预设声音（不克隆）
-```
-/yt-translate <URL> --voice-library
 ```
 
 ### 指定目标语言
@@ -89,11 +81,12 @@ source ~/.zshrc
 
 ## 技术细节
 
-### 声音克隆流程
-1. 从原视频提取音频片段（1-3 分钟最佳）
-2. 发送到 ElevenLabs Instant Voice Cloning
-3. 使用克隆的声音进行 TTS
-4. 自动匹配原音频语速和停顿
+### edge-tts TTS 生成
+1. 解析 SRT 字幕文件获取时间轴和文本
+2. 按目标语言选择预设语音（如 zh-CN-XiaoxiaoNeural）
+3. 调用 edge-tts CLI 逐句生成音频片段
+4. 生成 voice-map.json 记录片段映射
+5. 使用 ffmpeg 合并所有音频片段
 
 ### 字幕处理
 - 优先下载 YouTube 自动/手动字幕
@@ -108,14 +101,11 @@ Mac M 系列芯片自动启用 Metal Performance Shaders：
 
 ## 故障排除
 
-### API 限流
-ElevenLabs 有字符限制，长视频会自动切分处理。
-
 ### 下载失败
 检查网络连接，或尝试添加 `--cookies-from-browser=chrome`。
 
-### 声音克隆效果不佳
-确保原视频音频清晰，无明显背景音乐干扰。
+### 配音生成失败
+确保已安装 edge-tts：`pip3 install edge-tts`
 
 ## 文件结构
 
