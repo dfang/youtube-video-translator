@@ -5,8 +5,8 @@
 ## 安装
 
 ```bash
-# 克隆或复制技能到 OpenClaw 技能目录
-# 技能路径：~/.openclaw/workspace/skills/youtube-video-translator
+# 克隆到本地 skills 目录
+git clone https://github.com/dfang/youtube-video-translator.git ~/.openclaw/skills/youtube-video-translator
 
 # 安装 Python 依赖
 pip3 install -r requirements.txt
