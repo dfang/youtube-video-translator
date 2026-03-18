@@ -32,6 +32,8 @@ TTS_ENGINE="edge-tts"  # default: edge-tts, option: piper-tts
 SUBTITLE_TYPE="chinese"  # default: chinese, option: bilingual
 SUBTITLE_SOURCE="download"  # default: download, option: whisper
 AUDIO_MODE="dub"  # default: dub (only dubbed audio), option: original (only original audio)
+WHISPER_MODEL="large-v3-turbo"  # default: large-v3-turbo, options: tiny/base/small/medium/large-v3/large-v3-turbo
+VOCAB_FILE="medical"  # default: medical built-in vocabulary
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -61,6 +63,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --audio-mode)
             AUDIO_MODE="$2"
+            shift 2
+            ;;
+        --whisper-model)
+            WHISPER_MODEL="$2"
+            shift 2
+            ;;
+        --vocab)
+            VOCAB_FILE="$2"
             shift 2
             ;;
         *)
@@ -104,6 +114,12 @@ echo "📝 字幕类型：$([ "$SUBTITLE_TYPE" = "bilingual" ] && echo "中英�
 echo "📡 字幕来源：$( [ "$SUBTITLE_SOURCE" = "whisper" ] && echo "Whisper 本地转录" || ( [ "$SUBTITLE_SOURCE" = "whisperx" ] && echo "faster-whisper + whisperx 对齐" || echo "下载英文字幕" ))"
 echo "🔊 TTS 引擎：$TTS_ENGINE"
 echo "🎵 音频模式：$([ "$AUDIO_MODE" = "original" ] && echo "仅原音" || echo "仅配音")"
+if [[ "$SUBTITLE_SOURCE" == "whisper" || "$SUBTITLE_SOURCE" == "whisperx" ]]; then
+    echo "🧠 Whisper 模型：$WHISPER_MODEL"
+    if [[ -n "$VOCAB_FILE" ]]; then
+        echo "📖 词汇表：$VOCAB_FILE"
+    fi
+fi
 echo ""
 
 # Create working directory
@@ -154,7 +170,7 @@ fi
 print_status 2 5 "处理字幕" "running"
 # Set AUTO_CONFIRM to skip interactive prompts in transcribe.sh
 export AUTO_CONFIRM=true
-bash "$SCRIPT_DIR/transcribe.sh" "$WORK_DIR" "$TARGET_LANG" "$SUBTITLE_TYPE" "$SUBTITLE_SOURCE"
+bash "$SCRIPT_DIR/transcribe.sh" "$WORK_DIR" "$TARGET_LANG" "$SUBTITLE_TYPE" "$SUBTITLE_SOURCE" "$WHISPER_MODEL" "$VOCAB_FILE"
 if [[ $? -ne 0 ]]; then
     mark_step_fail 2 5 "处理字幕"
     echo "⚠️ 字幕处理失败，尝试继续..."

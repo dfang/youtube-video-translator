@@ -1,0 +1,54 @@
+# 自定义词汇表示例
+# 每行一个术语，# 开头的行会被忽略
+
+# 医学术语示例
+ARDS
+acute respiratory distress syndrome
+COVID-19
+SARS-CoV-2
+MERS
+ICU
+ventilator
+intubation
+hypoxemia
+hypercapnia
+pulmonary
+respiratory failure
+bronchospasm
+pneumonia
+sepsis
+bacteremia
+viremia
+cytokine storm
+ACE2 receptor
+spike protein
+viral load
+RT-PCR
+antigen
+antibody
+COPD
+asthma
+pulmonary fibrosis
+interstitial lung disease
+
+# 科技术语示例
+API
+SDK
+CLI
+GUI
+HTTP
+HTTPS
+TCP/IP
+DNS
+Kubernetes
+Docker
+containerization
+microservice
+serverless
+WebSocket
+REST
+GraphQL
+JWT
+OAuth
+SSH
+TLS/SSL

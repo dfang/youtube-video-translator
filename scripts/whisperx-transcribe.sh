@@ -1,16 +1,24 @@
 #!/bin/bash
 # Transcribe using faster-whisper + whisperx alignment (optional)
-# Usage: ./whisperx-transcribe.sh <WORK_DIR> <LANGUAGE>
+# Usage: ./whisperx-transcribe.sh <WORK_DIR> <LANGUAGE> [WHISPER_MODEL] [VOCAB_FILE]
 # LANGUAGE: en (default), zh, ja, ko, etc.
+# WHISPER_MODEL: medium (default), tiny, base, small, large-v3, large-v3-turbo
+# VOCAB_FILE: optional path to vocabulary file or built-in name (e.g., medical)
 
 set -e
 
 WORK_DIR="$1"
 LANGUAGE="${2:-en}"
+WHISPER_MODEL="${3:-large-v3-turbo}"
+VOCAB_FILE="${4:-medical}"
 
 cd "$WORK_DIR"
 
 echo "🎯 使用 faster-whisper + whisperx 进行转录和对齐"
+echo "  模型：$WHISPER_MODEL"
+if [[ -n "$VOCAB_FILE" ]]; then
+    echo "  词汇表：$VOCAB_FILE"
+fi
 
 # Find video file
 VIDEO_FILE=$(find . -maxdepth 1 -name "*.original.mp4" -type f | head -1)
@@ -43,14 +51,68 @@ import sys
 video_file = "$VIDEO_FILE"
 output_file = "$TRANSCRIPT_SRT"
 language = "$LANGUAGE"
+whisper_model = "$WHISPER_MODEL"
+vocab_file = "$VOCAB_FILE"
+
+# Build initial prompt from vocabulary
+initial_prompt = None
+if vocab_file:
+    vocab_words = []
+    # Check if built-in vocabulary
+    if vocab_file == "medical":
+        vocab_words = ["ARDS", "acute respiratory distress syndrome", "COVID-19", "SARS", "MERS",
+                       "ICU", "ventilator", "intubation", "hypoxemia", "hypercapnia",
+                       "pulmonary", "respiratory", "bronchospasm", "wheezing", "crackles",
+                       "pneumonia", "sepsis", "bacteremia", "viremia", "cytokine storm",
+                       "ACE2", "spike protein", "viral load", "PCR", "antigen", "antibody",
+                       "COPD", "asthma", "pulmonary fibrosis", "interstitial lung disease"]
+    elif vocab_file == "tech":
+        vocab_words = ["API", "SDK", "CLI", "GUI", "HTTP", "HTTPS", "TCP", "IP", "DNS",
+                       "Kubernetes", "Docker", "container", "microservice", "serverless",
+                       "JavaScript", "TypeScript", "Python", "React", "Vue", "Angular",
+                       "WebSocket", "REST", "GraphQL", "JWT", "OAuth", "SSH", "TLS", "SSL"]
+    elif os.path.exists(vocab_file):
+        with open(vocab_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    vocab_words.append(line)
+    else:
+        print(f"  ⚠️ 词汇文件不存在：{vocab_file}")
+
+    if vocab_words:
+        # Create a natural language prompt
+        initial_prompt = "The following terms may appear in this audio: " + ", ".join(vocab_words[:50])
+        print(f"  已加载 {len(vocab_words)} 个专业词汇")
+
+# Map model names
+model_mapping = {
+    "large-v3": "large-v3",
+    "large-v3-turbo": "large-v3-turbo",
+    "large": "large-v3",
+    "medium": "medium",
+    "small": "small",
+    "base": "base",
+    "tiny": "tiny"
+}
+model_name = model_mapping.get(whisper_model, "medium")
 
 # Try faster-whisper first
 try:
     from faster_whisper import WhisperModel
-    print("  加载 faster-whisper 模型 (medium)...")
-    model = WhisperModel("medium", device="cpu", compute_type="int8")
+    print(f"  加载 faster-whisper 模型 ({model_name})...")
+    if model_name in ["large-v3", "large-v3-turbo"]:
+        # Large models may need GPU, but try CPU with int8
+        model = WhisperModel(model_name, device="cpu", compute_type="int8")
+    else:
+        model = WhisperModel(model_name, device="cpu", compute_type="int8")
     print("  开始转录...")
-    segments, info = model.transcribe(video_file, language=language, vad_filter=True)
+    segments, info = model.transcribe(
+        video_file,
+        language=language,
+        vad_filter=True,
+        initial_prompt=initial_prompt
+    )
     segments = list(segments)
 except Exception as e:
     print(f"  faster-whisper 失败：{e}")
@@ -58,7 +120,7 @@ except Exception as e:
     import whisper
     model = whisper.load_model("base")
     print("  开始转录...")
-    result = model.transcribe(video_file, language=language)
+    result = model.transcribe(video_file, language=language, initial_prompt=initial_prompt)
     segments = result['segments']
 
 # Write SRT output

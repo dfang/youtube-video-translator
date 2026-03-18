@@ -80,9 +80,11 @@ pip3 install edge-tts
 /yt-translate <URL> --subtitle-source download
 
 # 使用 Whisper 重新生成字幕（质量更高，时间轴干净）
+# 默认使用 large-v3-turbo 模型 + 医学词汇表
 /yt-translate <URL> --subtitle-source whisper
 
 # 使用 faster-whisper + whisperx 对齐（最佳质量，单词级精度）
+# 默认使用 large-v3-turbo 模型 + 医学词汇表
 /yt-translate <URL> --subtitle-source whisperx
 ```
 
@@ -102,6 +104,49 @@ pip install faster-whisper whisperx
 ```
 /yt-translate <URL> --subtitles bilingual --cleanup --lang zh-CN
 ```
+
+### 提高转录准确性（针对专业术语）
+
+**默认配置**：whisper/whisperx 模式默认使用 `large-v3-turbo` 模型 + 医学词汇表，无需额外参数。
+
+当视频包含其他领域专业术语时，可以自定义：
+
+```
+# 使用更大的 Whisper 模型（精度更高，速度更慢）
+/yt-translate <URL> --subtitle-source whisper --whisper-model large-v3
+
+# 使用内置科技词汇表（而非默认的医学词汇表）
+/yt-translate <URL> --subtitle-source whisper --vocab tech
+
+# 使用自定义词汇文件（每行一个术语）
+/yt-translate <URL> --subtitle-source whisper --vocab-file my-terms.txt
+
+# 关闭词汇表（不使用任何术语提示）
+/yt-translate <URL> --subtitle-source whisper --vocab ""
+```
+
+**Whisper 模型选项**：
+- `tiny` - 最快，精度最低
+- `base` - 快速，一般精度
+- `small` - 中等速度，较好精度
+- `medium` - 默认，平衡速度与精度
+- `large-v3` - 最慢，精度最高（推荐用于专业内容）
+- `large-v3-turbo` - large-v3 的加速版本
+
+**内置词汇表**：
+- `medical` - 医学术语（ARDS, COVID-19, ICU, ventilator, 等）
+- `tech` - 科技术语（API, Kubernetes, Docker, JavaScript, 等）
+
+**自定义词汇文件格式** (my-terms.txt)：
+```
+# 每行一个术语
+ARDS
+acute respiratory distress syndrome
+COVID-19
+SARS-CoV-2
+```
+
+转录完成后会显示预览，可按 `e` 手动编辑校正确认后再继续翻译。
 
 ## 技术细节
 

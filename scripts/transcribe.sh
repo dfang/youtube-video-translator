@@ -1,8 +1,10 @@
 #!/bin/bash
 # Transcribe/Translate subtitles
-# Usage: ./transcribe.sh <WORK_DIR> <TARGET_LANG> <SUBTITLE_TYPE> <SUBTITLE_SOURCE>
+# Usage: ./transcribe.sh <WORK_DIR> <TARGET_LANG> <SUBTITLE_TYPE> <SUBTITLE_SOURCE> [WHISPER_MODEL] [VOCAB_FILE]
 # SUBTITLE_TYPE: chinese (default) or bilingual
 # SUBTITLE_SOURCE: download (default), whisper, or whisperx
+# WHISPER_MODEL: medium (default), tiny, base, small, large-v3
+# VOCAB_FILE: optional path to vocabulary file or built-in name (e.g., medical)
 
 set -e
 
@@ -10,6 +12,8 @@ WORK_DIR="$1"
 TARGET_LANG="${2:-zh-CN}"
 SUBTITLE_TYPE="${3:-chinese}"  # chinese or bilingual
 SUBTITLE_SOURCE="${4:-download}"  # download, whisper, or whisperx
+WHISPER_MODEL="${5:-large-v3-turbo}"  # whisper model
+VOCAB_FILE="${6:-medical}"  # default: medical built-in vocabulary
 
 cd "$WORK_DIR"
 
@@ -521,10 +525,21 @@ else
             # Use faster-whisper + whisperx alignment
             echo "  使用 faster-whisper + whisperx 进行转录和对齐..."
             SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-            bash "$SCRIPT_DIR/whisperx-transcribe.sh" "$WORK_DIR" "en"
+            bash "$SCRIPT_DIR/whisperx-transcribe.sh" "$WORK_DIR" "en" "$WHISPER_MODEL" "$VOCAB_FILE"
         elif command -v faster-whisper &> /dev/null; then
             echo "  使用 faster-whisper 进行转录（速度更快）..."
-            faster-whisper "$VIDEO_FILE" --model medium --output_dir . --output_format srt --language en
+            # Build initial prompt from vocabulary if provided
+            VOCAB_ARGS=""
+            if [[ -n "$VOCAB_FILE" ]]; then
+                if [[ "$VOCAB_FILE" == "medical" ]]; then
+                    VOCAB_ARGS="--initial-prompt \"The following medical terms may appear: ARDS, acute respiratory distress syndrome, COVID-19, SARS, MERS, ICU, ventilator, intubation, hypoxemia, pulmonary, respiratory, pneumonia, sepsis, cytokine storm, ACE2, viral load, PCR, COPD, asthma\""
+                elif [[ "$VOCAB_FILE" == "tech" ]]; then
+                    VOCAB_ARGS="--initial-prompt \"The following tech terms may appear: API, SDK, CLI, GUI, HTTP, HTTPS, Kubernetes, Docker, container, microservice, JavaScript, TypeScript, Python, React, WebSocket, REST, GraphQL, JWT, OAuth\""
+                elif [[ -f "$VOCAB_FILE" ]]; then
+                    VOCAB_ARGS="--initial-prompt-file $VOCAB_FILE"
+                fi
+            fi
+            faster-whisper "$VIDEO_FILE" --model "$WHISPER_MODEL" --output_dir . --output_format srt --language en $VOCAB_ARGS
             if [[ -f "${VIDEO_BASE}.srt" ]]; then
                 mv "${VIDEO_BASE}.srt" "$VIDEO_BASE.en.srt"
             fi
@@ -575,42 +590,92 @@ else
     fi
 fi
 
+# Step: Preview and confirm transcription (for whisper/whisperx modes)
+if [[ "$SUBTITLE_SOURCE" == "whisper" || "$SUBTITLE_SOURCE" == "whisperx" ]]; then
+    echo ""
+    echo "🔍 转录完成，预览前 15 条字幕："
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    head -n 50 "$SRT_FILE"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    # Check if non-interactive mode
+    if [[ -n "$AUTO_CONFIRM" ]] || [[ ! -t 0 ]]; then
+        echo "⚡ 非交互模式，自动继续..."
+    else
+        echo ""
+        echo "❓ 是否发现专业术语识别错误？"
+        echo "   [y] 继续 (识别正确)"
+        echo "   [e] 编辑字幕 (手动校正识别错误)"
+        echo "   [q] 退出脚本"
+        read -p "请输入 [y/e/q]: " PREVIEW_CHOICE
+
+        case "$PREVIEW_CHOICE" in
+            [qQ])
+                echo "🛑 用户选择退出。"
+                exit 0
+                ;;
+            [eE])
+                echo "📝 请在另一个终端或编辑器中修改：$SRT_FILE"
+                echo "💡 提示：可以使用以下命令快速编辑："
+                echo "   nano \"$SRT_FILE\""
+                echo "   或 code \"$SRT_FILE\""
+                read -p "修改完成后，请按回车键继续翻译..."
+                ;;
+            *)
+                echo "🚀 继续翻译..."
+                ;;
+        esac
+    fi
+fi
+
 # Translate subtitles from English to target language
 echo "  翻译字幕为 $TARGET_LANG..."
 
-# 人工确认步骤：显示预览并询问
-# 检测是否为交互模式，非交互模式自动跳过确认
-EN_PREVIEW=$(head -n 20 "$SRT_FILE" 2>/dev/null || echo "无法读取文件")
-echo "--------------------------------------------------"
-echo "🔍 英文字幕预览 ($SRT_FILE):"
-echo "$EN_PREVIEW"
-echo "--------------------------------------------------"
-
-# 检查是否为非交互模式（通过环境变量或 test -t 0）
-if [[ -n "$AUTO_CONFIRM" ]] || [[ ! -t 0 ]]; then
-    echo "⚡ 非交互模式，自动继续翻译..."
-    CONFIRM_CHOICE="y"
+# Detect translation method
+TRANSLATE_METHOD="google"
+if [[ -n "$ANTHROPIC_AUTH_TOKEN" ]]; then
+    TRANSLATE_METHOD="claude"
+    echo "  使用 Claude API 进行翻译..."
+    echo "  API Base URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}"
 else
-    echo "❓ 英文字幕看起来是否有重复（如滚动高亮模式）？"
-    echo "   [y] 继续翻译 (默认)"
-    echo "   [e] 编辑字幕 (此时你可以手动修改 $WORK_DIR 目录下的文件)"
-    echo "   [q] 退出脚本"
-    read -p "请输入 [y/e/q]: " CONFIRM_CHOICE
+    echo "  未配置 ANTHROPIC_AUTH_TOKEN，使用 Google Translate 免费翻译"
 fi
 
-case "$CONFIRM_CHOICE" in
-    [qQ])
-        echo "🛑 用户选择退出。"
-        exit 0
-        ;;
-    [eE])
-        echo "📝 请在另一个终端或编辑器中修改：$WORK_DIR/$SRT_FILE"
-        read -p "修改完成后，请按回车键继续翻译..."
-        ;;
-    *)
-        echo "🚀 继续翻译..."
-        ;;
-esac
+# 人工确认步骤：显示预览并询问（仅当不是 whisper/whisperx 模式且未设置 AUTO_CONFIRM）
+if [[ "$SUBTITLE_SOURCE" != "whisper" && "$SUBTITLE_SOURCE" != "whisperx" ]]; then
+    # 检测是否为交互模式，非交互模式自动跳过确认
+    EN_PREVIEW=$(head -n 20 "$SRT_FILE" 2>/dev/null || echo "无法读取文件")
+    echo "--------------------------------------------------"
+    echo "🔍 英文字幕预览 ($SRT_FILE):"
+    echo "$EN_PREVIEW"
+    echo "--------------------------------------------------"
+
+    # 检查是否为非交互模式（通过环境变量或 test -t 0）
+    if [[ -n "$AUTO_CONFIRM" ]] || [[ ! -t 0 ]]; then
+        echo "⚡ 非交互模式，自动继续翻译..."
+        CONFIRM_CHOICE="y"
+    else
+        echo "❓ 英文字幕看起来是否有重复（如滚动高亮模式）？"
+        echo "   [y] 继续翻译 (默认)"
+        echo "   [e] 编辑字幕 (此时你可以手动修改 $WORK_DIR 目录下的文件)"
+        echo "   [q] 退出脚本"
+        read -p "请输入 [y/e/q]: " CONFIRM_CHOICE
+    fi
+
+    case "$CONFIRM_CHOICE" in
+        [qQ])
+            echo "🛑 用户选择退出。"
+            exit 0
+            ;;
+        [eE])
+            echo "📝 请在另一个终端或编辑器中修改：$WORK_DIR/$SRT_FILE"
+            read -p "修改完成后，请按回车键继续翻译..."
+            ;;
+        *)
+            echo "🚀 继续翻译..."
+            ;;
+    esac
+fi
 
 if [[ "$SUBTITLE_TYPE" == "bilingual" ]]; then
     echo "  生成中英文双语字幕..."
@@ -619,8 +684,60 @@ python3 << EOF
 import re
 import requests
 import time
+import os
+
+# Translation configuration
+TRANSLATE_METHOD = "$TRANSLATE_METHOD"
+ANTHROPIC_AUTH_TOKEN = os.environ.get("ANTHROPIC_AUTH_TOKEN", "")
+ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
+TARGET_LANG_CODE = "$TARGET_LANG"
 
 def translate_text(text, target_lang="zh-CN"):
+    """Translate text using Claude API or Google Translate"""
+
+    if TRANSLATE_METHOD == "claude" and ANTHROPIC_AUTH_TOKEN:
+        return translate_with_claude(text, target_lang)
+    else:
+        return translate_with_google(text, target_lang)
+
+def translate_with_claude(text, target_lang):
+    """Translate text using Claude API"""
+    try:
+        lang_name = "Chinese" if target_lang.startswith("zh") else target_lang
+        prompt = f"""Translate the following English text to {lang_name}. Only output the translation, no explanations:
+
+{text}"""
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {ANTHROPIC_AUTH_TOKEN}",
+            "anthropic-version": "2023-06-01"
+        }
+
+        data = {
+            "model": "claude-sonnet-4-20250514",
+            "max_tokens": 1024,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ]
+        }
+
+        response = requests.post(
+            f"{ANTHROPIC_BASE_URL}/v1/messages",
+            headers=headers,
+            json=data,
+            timeout=30
+        )
+        response.raise_for_status()
+        result = response.json()
+
+        translation = result["content"][0]["text"].strip()
+        return translation
+    except Exception as e:
+        print(f"    Claude 翻译失败：{e}，回退到 Google Translate")
+        return translate_with_google(text, target_lang)
+
+def translate_with_google(text, target_lang):
     """Translate text using Google Translate"""
     try:
         url = "https://translate.googleapis.com/translate_a/t"
@@ -634,18 +751,14 @@ def translate_text(text, target_lang="zh-CN"):
         response = requests.get(url, params=params, timeout=10)
         result = response.json()
 
-        # Result structure: [[translation1, source_lang], [translation2, source_lang], ...]
-        # Or: [[translation1], [translation2], ...]
         if isinstance(result, list) and len(result) > 0:
             translation_parts = []
             for item in result:
                 if isinstance(item, list) and len(item) > 0:
-                    # First element is the translation
                     translation_parts.append(item[0])
             if translation_parts:
                 return ''.join(translation_parts)
 
-        # Fallback: return original text
         return text
     except Exception as e:
         print(f"    翻译失败：{e}")
@@ -720,8 +833,9 @@ for i, block in enumerate(blocks):
     block['text'] = [translated_text]
     translated_blocks.append(block)
 
-    # Rate limiting
-    time.sleep(0.5)
+    # Rate limiting (only for Google Translate)
+    if TRANSLATE_METHOD != "claude":
+        time.sleep(0.5)
 
 print(f"\n  翻译完成！")
 

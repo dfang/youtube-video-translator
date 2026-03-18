@@ -53,20 +53,53 @@ if [[ "$SUBTITLE_SOURCE" == "whisper" || "$SUBTITLE_SOURCE" == "whisperx" ]]; th
         echo "  跳过字幕下载，后续将使用 faster-whisper + whisperx 对齐（单词级精度）"
     fi
 else
-    # Download English subtitles using json3 format (clean, no duplicates)
-    # json3 format provides clean text without word-level highlights
-    echo "  下载英文字幕（使用 json3 格式，无重复内容）..."
+    # Download English subtitles
+    # Priority: srv3 (clean, no highlights) > json3 (clean) > vtt (may have duplicates)
+    # srv3 is YouTube's SRT-like format without word-level highlights
+    echo "  下载英文字幕（优先 srv3 格式，无重复内容）..."
+
+    # Try srv3 first (clean subtitle format)
     yt-dlp \
         --cookies-from-browser=chrome \
         --write-auto-subs \
         --sub-lang "en" \
-        --sub-format "json3" \
+        --sub-format "srv3" \
         --skip-download \
         --output "$WORK_DIR/$SAFE_TITLE.%(ext)s" \
-        "$VIDEO_URL" || echo "  警告：未找到英文字幕"
+        "$VIDEO_URL" 2>/dev/null || true
 
-    # Convert json3 to SRT
-    if [[ -f "$WORK_DIR/$SAFE_TITLE.en.json3" ]]; then
+    # If srv3 not available, try json3
+    if [[ ! -f "$WORK_DIR/$SAFE_TITLE.en.srv3" ]]; then
+        echo "  srv3 格式不可用，尝试 json3 格式..."
+        yt-dlp \
+            --cookies-from-browser=chrome \
+            --write-auto-subs \
+            --sub-lang "en" \
+            --sub-format "json3" \
+            --skip-download \
+            --output "$WORK_DIR/$SAFE_TITLE.%(ext)s" \
+            "$VIDEO_URL" 2>/dev/null || true
+    fi
+
+    # Fallback to vtt if no clean format available
+    if [[ ! -f "$WORK_DIR/$SAFE_TITLE.en.srv3" && ! -f "$WORK_DIR/$SAFE_TITLE.en.json3" ]]; then
+        echo "  干净格式不可用，降级到 vtt 格式（可能需要去重处理）..."
+        yt-dlp \
+            --cookies-from-browser=chrome \
+            --write-auto-subs \
+            --sub-lang "en" \
+            --sub-format "vtt" \
+            --skip-download \
+            --output "$WORK_DIR/$SAFE_TITLE.%(ext)s" \
+            "$VIDEO_URL" || echo "  警告：未找到英文字幕"
+    fi
+
+    # Convert to SRT based on available format
+    if [[ -f "$WORK_DIR/$SAFE_TITLE.en.srv3" ]]; then
+        echo "  转换 srv3 为 SRT 格式..."
+        mv "$WORK_DIR/$SAFE_TITLE.en.srv3" "$WORK_DIR/$SAFE_TITLE.en.srt"
+        echo "  已保存：$WORK_DIR/$SAFE_TITLE.en.srt"
+    elif [[ -f "$WORK_DIR/$SAFE_TITLE.en.json3" ]]; then
         echo "  转换 json3 为 SRT 格式..."
         python3 << CONVERT_EOF
 import json
@@ -105,8 +138,11 @@ with open("$WORK_DIR/$SAFE_TITLE.en.srt", 'w', encoding='utf-8') as f:
 
 print(f"  已转换 {len(segments)} 条字幕")
 CONVERT_EOF
-        # Clean up json3 file
         rm -f "$WORK_DIR/$SAFE_TITLE.en.json3"
+    elif [[ -f "$WORK_DIR/$SAFE_TITLE.en.vtt" ]]; then
+        echo "  转换 vtt 为 SRT 格式（使用去重处理）..."
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        python3 "$SCRIPT_DIR/dedup_subtitle.py" "$WORK_DIR/$SAFE_TITLE.en.vtt" "$WORK_DIR/$SAFE_TITLE.en.srt"
     fi
 fi
 

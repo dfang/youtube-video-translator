@@ -282,26 +282,34 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
     print("    ASS 字幕文件已创建：subtitles.ass")
 
-    # Use HandBrakeCLI to burn subtitles
+    # Use ffmpeg-full with subtitles filter to burn subtitles
     try:
-        subprocess.run([
-            'HandBrakeCLI',
-            '-i', f"$BASE_NAME.zh-CN.final.mp4",
-            '-o', f"$BASE_NAME.zh-CN.hardsub.mp4",
-            '--subtitle-burn=1',
-            '--subtitle=1',
-            '-e', 'x264',
-            '-q', '20'
-        ], check=True, capture_output=True, text=True)
-        print("    HandBrake 硬烧字幕完成")
+        # Save pre-hardsub version (softsub version)
+        import shutil
+        softsub_file = f"$BASE_NAME.zh-CN.softsub.mp4"
+        shutil.copy(f"$BASE_NAME.zh-CN.final.mp4", softsub_file)
+        print(f"    已保存软字幕版本：{softsub_file}")
 
-        # Replace final video with hardsubbed version
+        print("    使用 ffmpeg-full 硬烧字幕...")
+        subprocess.run([
+            'ffmpeg-full',
+            '-i', f"$BASE_NAME.zh-CN.final.mp4",
+            '-vf', f"subtitles=subtitles.ass",
+            '-c:a', 'copy',
+            '-c:v', 'libx264',
+            '-preset', 'medium',
+            '-crf', '18',
+            f"$BASE_NAME.zh-CN.hardsub.mp4"
+        ], check=True, capture_output=True, text=True)
+        print("    ffmpeg-full 硬烧字幕完成")
+
+        # Rename hardsubbed version to final
         os.rename(f"$BASE_NAME.zh-CN.hardsub.mp4", f"$BASE_NAME.zh-CN.final.mp4")
-        print("    已替换为硬烧字幕版本")
+        print("    已生成硬烧字幕版本")
     except subprocess.CalledProcessError as e:
-        print(f"    HandBrake 失败：{e.stderr[:200] if e.stderr else e}")
+        print(f"    ffmpeg-full 失败：{e.stderr[:200] if e.stderr else e}")
     except FileNotFoundError:
-        print("    未找到 HandBrakeCLI，跳过硬烧")
+        print("    未找到 ffmpeg-full，跳过硬烧")
     except Exception as e:
         print(f"    硬烧失败：{e}")
 

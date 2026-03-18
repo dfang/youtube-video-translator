@@ -1,0 +1,538 @@
+# 医学专业词汇表
+# 每行一个术语，# 开头的行会被忽略
+
+# 基础医学术语
+diagnosis
+prognosis
+symptom
+syndrome
+acute
+chronic
+benign
+malignant
+inflammation
+infection
+
+# 呼吸系统
+ARDS
+acute respiratory distress syndrome
+respiratory failure
+pulmonary
+bronchospasm
+pneumonia
+COPD
+asthma
+pulmonary fibrosis
+interstitial lung disease
+hypoxemia
+hypercapnia
+ventilator
+intubation
+oxygen saturation
+dyspnea
+tachypnea
+apnea
+
+# 心血管系统
+hypertension
+hypotension
+tachycardia
+bradycardia
+arrhythmia
+atrial fibrillation
+myocardial infarction
+heart failure
+cardiac arrest
+hypertrophy
+ischemia
+infarction
+thrombosis
+embolism
+aneurysm
+
+# 感染与免疫
+sepsis
+bacteremia
+viremia
+fungemia
+cytokine storm
+immune response
+autoimmune
+antigen
+antibody
+IgG
+IgM
+IgE
+T-cell
+B-cell
+macrophage
+neutrophil
+lymphocyte
+
+# 病毒与病原体
+COVID-19
+SARS-CoV-2
+MERS
+SARS
+influenza
+RSV
+rhinovirus
+adenovirus
+cytomegalovirus
+Epstein-Barr virus
+herpes simplex
+varicella zoster
+hepatitis A
+hepatitis B
+hepatitis C
+HIV
+tuberculosis
+malaria
+bacterial
+viral
+fungal
+parasitic
+
+# 检测与诊断
+RT-PCR
+antigen test
+antibody test
+viral load
+CT scan
+MRI
+X-ray
+ultrasound
+biopsy
+histology
+cytology
+electrolytes
+complete blood count
+CBC
+basic metabolic panel
+liver function test
+renal function test
+creatinine
+BUN
+troponin
+BNP
+D-dimer
+C-reactive protein
+erythrocyte sedimentation rate
+procalcitonin
+lactate
+arterial blood gas
+ABG
+PaO2
+PaCO2
+SpO2
+
+# 药物与治疗
+antibiotic
+antiviral
+antifungal
+corticosteroid
+bronchodilator
+vasopressor
+inotrope
+diuretic
+anticoagulant
+antiplatelet
+thrombolytic
+analgesic
+anesthetic
+sedative
+neuromuscular blocker
+ACE inhibitor
+beta blocker
+calcium channel blocker
+statin
+insulin
+chemotherapy
+radiation therapy
+immunotherapy
+monoclonal antibody
+vaccine
+adjuvant
+contraindication
+drug interaction
+pharmacokinetics
+pharmacodynamics
+
+# 重症监护
+ICU
+intensive care
+critical care
+mechanical ventilation
+non-invasive ventilation
+BiPAP
+CPAP
+prone positioning
+ECMO
+dialysis
+CRRT
+hemofiltration
+plasmapheresis
+therapeutic hypothermia
+targeted temperature management
+sedation
+analgesia
+delirium
+pressure ulcer
+central line
+arterial line
+chest tube
+endotracheal tube
+tracheostomy
+nasogastric tube
+feeding tube
+TPN
+parenteral nutrition
+enteral nutrition
+
+# 解剖学术语
+thoracic
+abdominal
+pelvic
+cranial
+cervical
+lumbar
+sacral
+peripheral
+central
+proximal
+distal
+anterior
+posterior
+medial
+lateral
+superior
+inferior
+ventral
+dorsal
+superficial
+deep
+
+# 病理状态
+edema
+erythema
+necrosis
+apoptosis
+metastasis
+carcinoma
+sarcoma
+leukemia
+lymphoma
+melanoma
+adenoma
+polyp
+cyst
+abscess
+fistula
+stricture
+obstruction
+perforation
+hemorrhage
+hematoma
+seroma
+
+# 手术与操作
+laparoscopy
+thoracoscopy
+endoscopy
+colonoscopy
+bronchoscopy
+laryngoscopy
+intubation
+extubation
+cannulation
+catheterization
+biopsy
+aspiration
+drainage
+debridement
+incision and drainage
+I&D
+suture
+staple
+graft
+flap
+anastomosis
+resection
+lobectomy
+colectomy
+mastectomy
+hysterectomy
+appendectomy
+cholecystectomy
+nephrectomy
+splenectomy
+
+# 实验室指标
+hemoglobin
+hematocrit
+leukocytosis
+leukopenia
+thrombocytosis
+thrombocytopenia
+anemia
+polycythemia
+hyperkalemia
+hypokalemia
+hypernatremia
+hyponatremia
+hypercalcemia
+hypocalcemia
+hypermagnesemia
+hypomagnesemia
+hyperphosphatemia
+hypophosphatemia
+hyperglycemia
+hypoglycemia
+azotemia
+uremia
+acidosis
+alkalosis
+metabolic acidosis
+respiratory acidosis
+metabolic alkalosis
+respiratory alkalosis
+anion gap
+
+# 神经系统
+stroke
+CVA
+TIA
+seizure
+epilepsy
+status epilepticus
+encephalopathy
+meningitis
+encephalitis
+myelitis
+neuropathy
+neurodegenerative
+Parkinson disease
+Alzheimer disease
+multiple sclerosis
+amyotrophic lateral sclerosis
+ALS
+myasthenia gravis
+Guillain-Barre
+intracranial pressure
+ICP
+cerebral edema
+herniation
+concussion
+contusion
+subdural
+epidural
+subarachnoid
+
+# 内分泌系统
+diabetes mellitus
+type 1 diabetes
+type 2 diabetes
+diabetic ketoacidosis
+DKA
+HHS
+hyperosmolar hyperglycemic state
+hypothyroidism
+hyperthyroidism
+thyroiditis
+goiter
+hyperparathyroidism
+hypoparathyroidism
+adrenal insufficiency
+Cushing syndrome
+Addison disease
+pheochromocytoma
+acromegaly
+gigantism
+dwarfism
+metabolic syndrome
+obesity
+cachexia
+
+# 妇产科
+pregnancy
+trimester
+gestational
+prenatal
+postpartum
+preeclampsia
+eclampsia
+HELLP syndrome
+gestational diabetes
+chorioamnionitis
+placental abruption
+placenta previa
+ectopic pregnancy
+miscarriage
+stillbirth
+preterm labor
+C-section
+vaginal delivery
+breech
+transverse lie
+APGAR score
+neonatal
+perinatal
+congenital
+
+# 儿科
+pediatric
+neonatal
+infant
+toddler
+adolescent
+failure to thrive
+developmental delay
+autism spectrum disorder
+ADHD
+cerebral palsy
+cystic fibrosis
+sickle cell disease
+thalassemia
+hemophilia
+Kawasaki disease
+Reye syndrome
+intussusception
+hypertrophic pyloric stenosis
+bronchiolitis
+croup
+epiglottitis
+otitis media
+tonsillitis
+impetigo
+cellulitis
+
+# 骨科
+fracture
+dislocation
+subluxation
+sprain
+strain
+tendonitis
+bursitis
+arthritis
+osteoarthritis
+rheumatoid arthritis
+gout
+pseudogout
+osteoporosis
+osteopenia
+osteomyelitis
+septic arthritis
+avascular necrosis
+compartment syndrome
+carpal tunnel syndrome
+rotator cuff
+meniscus
+ACL
+PCL
+MCL
+LCL
+Achilles tendon
+plantar fasciitis
+scoliosis
+kyphosis
+lordosis
+spinal stenosis
+herniated disc
+radiculopathy
+sciatica
+
+# 皮肤科
+dermatitis
+eczema
+psoriasis
+urticaria
+angioedema
+erythema multiforme
+Stevens-Johnson syndrome
+toxic epidermal necrolysis
+pemphigus
+bullous pemphigoid
+impetigo
+cellulitis
+erysipelas
+necrotizing fasciitis
+folliculitis
+furuncle
+carbuncle
+abscess
+paronychia
+herpes zoster
+shingles
+verruca
+molluscum contagiosum
+tinea
+candidiasis
+scabies
+pediculosis
+actinic keratosis
+basal cell carcinoma
+squamous cell carcinoma
+
+# 眼科
+conjunctivitis
+keratitis
+uveitis
+iritis
+scleritis
+episcleritis
+blepharitis
+chalazion
+hordeolum
+entropion
+ectropion
+ptosis
+diplopia
+strabismus
+amblyopia
+nystagmus
+glaucoma
+cataract
+macular degeneration
+diabetic retinopathy
+retinal detachment
+vitreous hemorrhage
+hyphema
+hypopyon
+papilledema
+optic neuritis
+retinitis
+choroiditis
+
+# 耳鼻喉科
+otitis externa
+otitis media
+mastoiditis
+tympanic membrane perforation
+otosclerosis
+Meniere disease
+vertigo
+tinnitus
+hearing loss
+sensorineural
+conductive
+mixed hearing loss
+rhinitis
+sinusitis
+nasal polyps
+deviated septum
+epistaxis
+pharyngitis
+tonsillitis
+peritonsillar abscess
+quinsy
+retropharyngeal abscess
+epiglottitis
+croup
+laryngitis
+vocal cord dysfunction
+dysphagia
+odynophagia
+globus sensation
+hoarseness
+stridor
