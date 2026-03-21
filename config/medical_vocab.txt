@@ -1,0 +1,57 @@
+# 医学术语词汇表 - 呼吸治疗/重症监护
+mechanical power,机械能
+ventilator-induced lung injury,呼吸机诱导的肺损伤
+ventilator,呼吸机
+ARDS,急性呼吸窘迫综合征
+acute respiratory distress syndrome,急性呼吸窘迫综合征
+lung injury,肺损伤
+mechanical ventilation,机械通气
+tidal volume,潮气量
+positive end-expiratory pressure,呼气末正压
+PEEP,呼气末正压
+driving pressure,驱动压
+respiratory mechanics,呼吸力学
+elastance,弹性
+compliance,顺应性
+lung stress,肺应力
+lung strain,肺应变
+energy transfer,能量传递
+power density,功率密度
+VILI,呼吸机诱导肺损伤
+barotrauma,气压伤
+volutrauma,容积伤
+atelectrauma,不张伤
+biotrauma,生物伤
+oxygenation,氧合
+hypercapnia,高碳酸血症
+hypoxemia,低氧血症
+pulmonary,肺的
+alveolar,肺泡的
+intrapleural,胸膜内的
+esophageal pressure,食管压
+transpulmonary pressure,跨肺压
+airway pressure,气道压
+peak pressure,峰压
+plateau pressure,平台压
+mean airway pressure,平均气道压
+minute ventilation,分钟通气量
+respiratory rate,呼吸频率
+inspiratory,吸气的
+expiratory,呼气的
+flow rate,流速
+pressure support,压力支持
+assist-control,辅助控制
+synchronized intermittent mandatory ventilation,同步间歇指令通气
+pressure control,压力控制
+volume control,容量控制
+dual-control,双控
+adaptive support ventilation,适应性支持通气
+proportional assist ventilation,比例辅助通气
+neurally adjusted ventilatory assist,神经调节通气辅助
+extracorporeal membrane oxygenation,体外膜肺氧合
+ECMO,体外膜肺氧合
+prone positioning,俯卧位通气
+recruitment maneuver,复张手法
+lung protective ventilation,肺保护性通气
+low tidal volume,低潮气量
+permissive hypercapnia,允许性高碳酸血症

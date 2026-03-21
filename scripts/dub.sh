@@ -201,7 +201,7 @@ def generate_tts_piper(text, output_file, model_path, config_path):
     try:
         # Use piper command line
         result = subprocess.run([
-            'piper',
+            '/Users/fang/.local/bin/piper',
             '-m', model_path,
             '-f', output_file,
             '--sentence_silence', '0.2'

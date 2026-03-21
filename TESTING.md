@@ -97,7 +97,7 @@ yt-dlp --proxy "http://127.0.0.1:7890" "URL"
 ```
 
 ### 问题：翻译速度慢
-**解决：** Google Translate 有速率限制，已内置 0.5 秒延迟
+**解决：** 使用大模型批量翻译并调小批次，例如设置 `TRANSLATE_BATCH_SIZE=8`，同时确认 `ANTHROPIC_MODEL` 使用可用高速模型（如 `qwen3-coder-plus`）
 
 ### 问题：声音克隆效果差
 **解决：** 

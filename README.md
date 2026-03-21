@@ -164,12 +164,23 @@ SARS-CoV-2
   - `whisperx`：使用 faster-whisper + whisperx 对齐（单词级精度，最佳质量）
 - 自动检测并转换字幕格式（VTT → SRT）
 - 长字幕自动切分（每段<4000 字符）
-- Google Translate API 翻译
+- 大模型 API 翻译（Anthropic 兼容接口，支持阿里云 Coding Plan）
+- 严格禁用 Google Translate fallback
 
 ### MPS 加速
 Mac M 系列芯片自动启用 Metal Performance Shaders：
 - 音频分析（librosa）
 - 本地转录（如使用 Whisper）
+
+### 大模型翻译配置（必需）
+英文字幕翻译必须使用大模型，不会回退到 Google Translate。请在 `.env` 配置：
+
+```bash
+# 阿里云 Coding Plan 示例
+ANTHROPIC_AUTH_TOKEN="sk-sp-xxx"
+ANTHROPIC_BASE_URL="https://coding.dashscope.aliyuncs.com/apps/anthropic"
+ANTHROPIC_MODEL="qwen3-coder-plus"
+```
 
 ## 故障排除
 

@@ -2,6 +2,12 @@
 
 专业级 YouTube 视频翻译工具，自动下载视频、翻译字幕、克隆声音配音，输出中文配音视频。
 
+## 硬性约束（必须遵守）
+
+- 英文字幕翻译 **必须使用大模型 API**（Anthropic 兼容接口，如 Anthropic 官方或阿里云 Coding Plan）。
+- **严禁使用 Google Translate**（包括任何 fallback / 降级路径）。
+- 若未配置大模型鉴权（如 `ANTHROPIC_AUTH_TOKEN`）或模型不可用，必须直接报错并停止，不输出半成品翻译结果。
+
 ## 触发条件
 
 当用户提到以下内容时自动触发：
@@ -134,9 +140,10 @@ bash /Users/fang/.claude/skills/youtube-video-translator/scripts/translate.sh "{
 ### 2. 字幕处理模块 (transcribe.sh)
 
 - 自动检测并转换字幕格式（VTT → SRT）
-- 使用 Google Translate API 逐句翻译字幕
+- 使用大模型 API 进行批量字幕翻译（支持阿里云 Coding Plan Anthropic 兼容网关）
 - 保留原字幕时间轴
 - 输出双语 SRT 字幕文件
+- 检测英文残留并自动补翻（仅大模型路径，不允许 Google fallback）
 - **字幕来源选项**：
   - `download`（默认）：下载 YouTube 英文字幕，使用 yt-dlp 下载原始字幕（无逐词高亮）
   - `whisper`：使用 Whisper/faster-whisper 本地转录（无高亮，时间轴干净，质量更高）

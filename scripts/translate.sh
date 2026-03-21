@@ -126,6 +126,24 @@ echo ""
 mkdir -p "$WORK_DIR"
 cd "$WORK_DIR"
 
+# Progress output mode:
+# - interactive TTY: keep single-line refresh
+# - non-interactive/Telegram: print newline events for each step update
+PROGRESS_EVENT_MODE=false
+if [[ ! -t 1 || -n "$TELEGRAM_PROGRESS" || -n "$TELEGRAM_CHAT_ID" ]]; then
+    PROGRESS_EVENT_MODE=true
+fi
+
+emit_progress_event() {
+    local step=$1
+    local total=$2
+    local status=$3
+    local desc=$4
+    # Machine-readable event for Telegram/automation parsers.
+    # Format: TG_PROGRESS|<step>|<total>|<status>|<description>
+    echo "TG_PROGRESS|${step}|${total}|${status}|${desc}"
+}
+
 # Helper function to print step status
 print_status() {
     local step=$1
@@ -139,21 +157,45 @@ print_status() {
         "fail") icon="❌" ;;
         "warn") icon="⚠️" ;;
     esac
-    echo -ne "\r${icon} 步骤 ${step}/${total}: ${desc}   "
+    if [[ "$PROGRESS_EVENT_MODE" == "true" ]]; then
+        echo "${icon} 步骤 ${step}/${total}: ${desc}"
+        emit_progress_event "$step" "$total" "$status" "$desc"
+    else
+        echo -ne "\r${icon} 步骤 ${step}/${total}: ${desc}   "
+    fi
 }
 
 mark_step_done() {
     local step=$1
     local total=$2
     local desc=$3
-    echo -e "\r✅ 步骤 ${step}/${total}: ${desc} [完成]"
+    if [[ "$PROGRESS_EVENT_MODE" == "true" ]]; then
+        echo "✅ 步骤 ${step}/${total}: ${desc} [完成]"
+        emit_progress_event "$step" "$total" "done" "$desc"
+    else
+        echo -e "\r✅ 步骤 ${step}/${total}: ${desc} [完成]"
+    fi
 }
 
 mark_step_fail() {
     local step=$1
     local total=$2
     local desc=$3
-    echo -e "\r❌ 步骤 ${step}/${total}: ${desc} [失败]"
+    if [[ "$PROGRESS_EVENT_MODE" == "true" ]]; then
+        echo "❌ 步骤 ${step}/${total}: ${desc} [失败]"
+        emit_progress_event "$step" "$total" "fail" "$desc"
+    else
+        echo -e "\r❌ 步骤 ${step}/${total}: ${desc} [失败]"
+    fi
+}
+
+cleanup_temp_translate_scripts() {
+    local count
+    count=$(find "$WORK_DIR" -maxdepth 1 -type f \( -name "trans.py" -o -name "trans_full.py" -o -name "trans_*.py" \) | wc -l | tr -d ' ')
+    if [[ "${count:-0}" -gt 0 ]]; then
+        find "$WORK_DIR" -maxdepth 1 -type f \( -name "trans.py" -o -name "trans_full.py" -o -name "trans_*.py" \) -delete
+        echo "🧹 已清理临时翻译脚本：$count 个"
+    fi
 }
 
 # Step 1: Download video and subtitles
@@ -177,6 +219,7 @@ if [[ $? -ne 0 ]]; then
 else
     mark_step_done 2 5 "处理字幕"
 fi
+cleanup_temp_translate_scripts
 
 # Step 3: Generate dubbed audio (skip if original audio mode)
 if [[ "$AUDIO_MODE" != "original" ]]; then

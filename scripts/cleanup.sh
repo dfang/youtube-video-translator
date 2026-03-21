@@ -38,6 +38,9 @@ PATTERNS=(
     "*.zh-CN.mp3"
     "concat_list.txt"
     "subtitles.ass"
+    "trans.py"
+    "trans_full.py"
+    "trans_*.py"
 )
 
 for pattern in "${PATTERNS[@]}"; do

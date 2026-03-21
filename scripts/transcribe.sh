@@ -15,7 +15,26 @@ SUBTITLE_SOURCE="${4:-download}"  # download, whisper, or whisperx
 WHISPER_MODEL="${5:-large-v3-turbo}"  # whisper model
 VOCAB_FILE="${6:-medical}"  # default: medical built-in vocabulary
 
+# Resolve script paths before changing directory (supports relative invocation)
+CALLER_PWD="$(pwd)"
+if [[ "${BASH_SOURCE[0]}" = /* ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+    SCRIPT_DIR="$(cd "$CALLER_PWD/$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+BASE_DIR="$(dirname "$SCRIPT_DIR")"
+
 cd "$WORK_DIR"
+
+# Load environment variables from .env file (for ANTHROPIC_AUTH_TOKEN etc.)
+ENV_FILE="$BASE_DIR/.env"
+if [[ -f "$ENV_FILE" ]]; then
+    echo "📄 加载环境变量：$ENV_FILE"
+    export $(grep -v '^#' "$ENV_FILE" | xargs)
+    echo "  ANTHROPIC_AUTH_TOKEN: ${ANTHROPIC_AUTH_TOKEN:0:10}..."
+else
+    echo "⚠️ 未找到 .env 文件：$ENV_FILE"
+fi
 
 # Helper function to convert VTT to SRT
 convert_vtt_to_srt() {
@@ -300,6 +319,45 @@ CLEAN_EOF
     echo "  已复制中文字幕：$target_file"
 }
 
+subtitle_needs_retranslation() {
+    local srt_file="$1"
+    python3 - "$srt_file" << 'PY'
+import re
+import sys
+
+path = sys.argv[1]
+try:
+    with open(path, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+except Exception:
+    print("0")
+    sys.exit(0)
+
+blocks = re.split(r'\n\n+', content.strip())
+lines = []
+for block in blocks:
+    parts = [x.strip() for x in block.splitlines() if x.strip()]
+    if len(parts) >= 3 and parts[0].isdigit() and "-->" in parts[1]:
+        lines.append(" ".join(parts[2:]))
+
+if not lines:
+    print("0")
+    sys.exit(0)
+
+# Ignore very early intro lines; focus on body where batch issues often appear.
+sample = lines[10:] if len(lines) > 15 else lines
+bad = 0
+for line in sample:
+    en_letters = len(re.findall(r"[A-Za-z]", line))
+    has_cjk = bool(re.search(r"[\u4e00-\u9fff]", line))
+    if en_letters >= 6 and not has_cjk:
+        bad += 1
+
+ratio = bad / len(sample)
+print("1" if (bad >= 3 and ratio >= 0.2) else "0")
+PY
+}
+
 echo "  检测字幕文件..."
 
 # In bilingual mode or whisperx mode, always regenerate subtitles to ensure clean output
@@ -318,6 +376,15 @@ fi
 CHINESE_SRT=$(find . -maxdepth 1 -name "*.zh-CN.srt" -type f | head -1)
 if [[ -n "$CHINESE_SRT" ]]; then
     echo "  找到已有中文字幕：$CHINESE_SRT"
+    NEED_RETRANSLATE=$(subtitle_needs_retranslation "$CHINESE_SRT")
+    if [[ "$NEED_RETRANSLATE" == "1" ]]; then
+        echo "  检测到中文字幕存在较多英文残留，自动重新翻译..."
+        rm -f "$CHINESE_SRT"
+        CHINESE_SRT=""
+    fi
+fi
+
+if [[ -n "$CHINESE_SRT" ]]; then
     SRT_FILE="$CHINESE_SRT"
     BASE_NAME="${SRT_FILE%.*}"
     BASE_NAME="${BASE_NAME%.$TARGET_LANG}"
@@ -356,7 +423,6 @@ if [[ -n "$ZH_HANS_VTT" ]]; then
     VIDEO_BASE=$(find . -maxdepth 1 -name "*.original.mp4" -type f | head -1)
     VIDEO_BASE="${VIDEO_BASE%.original.mp4}"
     # Use dedup_subtitle.py to clean YouTube highlight-style subtitles
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     python3 "$SCRIPT_DIR/dedup_subtitle.py" "$ZH_HANS_VTT" "$VIDEO_BASE.zh-CN.srt"
 
     # If bilingual mode, also need to prepare English subtitle for TTS
@@ -524,7 +590,6 @@ else
         if [[ "$SUBTITLE_SOURCE" == "whisperx" ]]; then
             # Use faster-whisper + whisperx alignment
             echo "  使用 faster-whisper + whisperx 进行转录和对齐..."
-            SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
             bash "$SCRIPT_DIR/whisperx-transcribe.sh" "$WORK_DIR" "en" "$WHISPER_MODEL" "$VOCAB_FILE"
         elif command -v faster-whisper &> /dev/null; then
             echo "  使用 faster-whisper 进行转录（速度更快）..."
@@ -631,15 +696,18 @@ fi
 # Translate subtitles from English to target language
 echo "  翻译字幕为 $TARGET_LANG..."
 
-# Detect translation method
-TRANSLATE_METHOD="google"
-if [[ -n "$ANTHROPIC_AUTH_TOKEN" ]]; then
-    TRANSLATE_METHOD="claude"
-    echo "  使用 Claude API 进行翻译..."
-    echo "  API Base URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}"
-else
-    echo "  未配置 ANTHROPIC_AUTH_TOKEN，使用 Google Translate 免费翻译"
+# Claude-only translation
+if [[ -z "$ANTHROPIC_AUTH_TOKEN" ]]; then
+    echo "  ❌ 未配置 ANTHROPIC_AUTH_TOKEN，已禁用 Google Translate 回退"
+    echo "  请在 .env 中配置 ANTHROPIC_AUTH_TOKEN 后重试"
+    exit 1
 fi
+if [[ "${ANTHROPIC_BASE_URL:-}" == *"dashscope.aliyuncs.com"* ]]; then
+    echo "  使用阿里云 Coding Plan 兼容接口进行翻译..."
+else
+    echo "  使用 Anthropic 兼容接口进行翻译..."
+fi
+echo "  API Base URL: ${ANTHROPIC_BASE_URL:-https://api.anthropic.com}"
 
 # 人工确认步骤：显示预览并询问（仅当不是 whisper/whisperx 模式且未设置 AUTO_CONFIRM）
 if [[ "$SUBTITLE_SOURCE" != "whisper" && "$SUBTITLE_SOURCE" != "whisperx" ]]; then
@@ -680,6 +748,7 @@ fi
 if [[ "$SUBTITLE_TYPE" == "bilingual" ]]; then
     echo "  生成中英文双语字幕..."
 fi
+
 python3 << EOF
 import re
 import requests
@@ -687,82 +756,265 @@ import time
 import os
 
 # Translation configuration
-TRANSLATE_METHOD = "$TRANSLATE_METHOD"
+BASE_DIR = "$BASE_DIR"
 ANTHROPIC_AUTH_TOKEN = os.environ.get("ANTHROPIC_AUTH_TOKEN", "")
 ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
 TARGET_LANG_CODE = "$TARGET_LANG"
+BATCH_SIZE = int(os.environ.get("TRANSLATE_BATCH_SIZE", "12"))
+USER_MODEL = os.environ.get("ANTHROPIC_MODEL", "").strip()
+
+def is_dashscope_base(url):
+    return "dashscope.aliyuncs.com" in (url or "").lower()
+
+def build_model_candidates():
+    if USER_MODEL:
+        return [USER_MODEL]
+    if is_dashscope_base(ANTHROPIC_BASE_URL):
+        # For Aliyun Coding Plan, Claude model ids are usually unavailable.
+        return ["qwen3.5-plus", "qwen3-coder-plus", "qwen-plus", "qwen-max", "kimi-k2-250711", "glm-4.6"]
+    return ["claude-3-5-sonnet-20241022", "claude-3-7-sonnet-20250219"]
+
+def call_anthropic_compatible(prompt, model, max_tokens=1024, timeout=30):
+    """Call Anthropic-compatible /v1/messages endpoint."""
+    base = ANTHROPIC_BASE_URL.rstrip("/")
+    url = f"{base}/v1/messages"
+    payload = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+
+    attempts = [
+        {
+            "Content-Type": "application/json",
+            "x-api-key": ANTHROPIC_AUTH_TOKEN,
+            "anthropic-version": "2023-06-01",
+        },
+        {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {ANTHROPIC_AUTH_TOKEN}",
+            "anthropic-version": "2023-06-01",
+        },
+    ]
+
+    errors = []
+    for headers in attempts:
+        try:
+            resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+            if resp.status_code >= 400:
+                body = resp.text[:600].replace("\n", " ")
+                errors.append(f"{resp.status_code} {body}")
+                continue
+
+            result = resp.json()
+            content = result.get("content", [])
+            if content and isinstance(content, list):
+                text = content[0].get("text", "").strip()
+                if text:
+                    return text
+            errors.append(f"invalid response: {str(result)[:300]}")
+        except Exception as e:
+            errors.append(str(e))
+
+    raise RuntimeError(" | ".join(errors[-2:]))
+
+def call_llm_api(prompt, max_tokens=1024, timeout=120):
+    """Try candidate models until one works."""
+    errors = []
+    for model in build_model_candidates():
+        try:
+            return call_anthropic_compatible(prompt, model=model, max_tokens=max_tokens, timeout=timeout)
+        except Exception as e:
+            errors.append(f"{model}: {e}")
+    raise RuntimeError(
+        f"LLM API 调用失败（base={ANTHROPIC_BASE_URL}）。"
+        f"请设置 ANTHROPIC_MODEL 指定可用模型。失败详情：{' || '.join(errors[-3:])}"
+    )
 
 def translate_text(text, target_lang="zh-CN"):
-    """Translate text using Claude API or Google Translate"""
-
-    if TRANSLATE_METHOD == "claude" and ANTHROPIC_AUTH_TOKEN:
-        return translate_with_claude(text, target_lang)
-    else:
-        return translate_with_google(text, target_lang)
+    """Translate text using Claude API only."""
+    return translate_with_claude(text, target_lang)
 
 def translate_with_claude(text, target_lang):
     """Translate text using Claude API"""
     try:
-        lang_name = "Chinese" if target_lang.startswith("zh") else target_lang
-        prompt = f"""Translate the following English text to {lang_name}. Only output the translation, no explanations:
+        lang_name = "简体中文" if target_lang.startswith("zh") else target_lang
+        prompt = f"""你是一位专业的医学翻译。请将以下英文字幕翻译成{lang_name}。
 
-{text}"""
+翻译要求：
+1. **所有内容必须翻译成中文**，不要保留任何英文单词（包括术语、缩写、专有名词）
+2. 医学专业术语使用标准中文译名（如：ARDS→急性呼吸窘迫综合征，tidal volume→潮气量）
+3. 翻译要自然流畅，符合中文口语表达习惯
+4. 只输出翻译结果，不要任何解释或额外内容
 
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {ANTHROPIC_AUTH_TOKEN}",
-            "anthropic-version": "2023-06-01"
-        }
+英文原文：
+{text}
 
-        data = {
-            "model": "claude-sonnet-4-20250514",
-            "max_tokens": 1024,
-            "messages": [
-                {"role": "user", "content": prompt}
-            ]
-        }
+中文翻译："""
 
-        response = requests.post(
-            f"{ANTHROPIC_BASE_URL}/v1/messages",
-            headers=headers,
-            json=data,
-            timeout=30
-        )
-        response.raise_for_status()
-        result = response.json()
-
-        translation = result["content"][0]["text"].strip()
-        return translation
+        return call_llm_api(prompt, max_tokens=1024, timeout=30)
     except Exception as e:
-        print(f"    Claude 翻译失败：{e}，回退到 Google Translate")
-        return translate_with_google(text, target_lang)
+        raise RuntimeError(f"LLM 翻译失败: {e}")
 
-def translate_with_google(text, target_lang):
-    """Translate text using Google Translate"""
+def translate_batch_with_claude(texts, target_lang):
+    """Translate multiple subtitle lines in one Claude request."""
+    if not texts:
+        return []
+
+    lang_name = "简体中文" if target_lang.startswith("zh") else target_lang
+    numbered_lines = []
+    for i, text in enumerate(texts, 1):
+        clean_text = re.sub(r'\s+', ' ', text).strip()
+        numbered_lines.append(f"[{i}] {clean_text}")
+
+    prompt = f"""你是一位专业的医学翻译。请将以下英文字幕逐行翻译成{lang_name}。
+
+翻译要求：
+1. 所有内容必须翻译成中文，不要保留英文。
+2. 医学术语使用标准中文译名。
+3. 保持每一行编号不变，不要遗漏或新增行。
+4. 每行只输出对应翻译，不要解释。
+
+待翻译字幕：
+{chr(10).join(numbered_lines)}
+
+请严格按如下格式输出：
+[1] 第一行译文
+[2] 第二行译文
+..."""
+
+    output = call_llm_api(prompt, max_tokens=4096, timeout=60)
+
+    parsed = {}
+    for line in output.splitlines():
+        m = re.match(r'^\[(\d+)\]\s*(.*)$', line.strip())
+        if m:
+            idx = int(m.group(1))
+            parsed[idx] = m.group(2).strip()
+
+    if len(parsed) != len(texts):
+        raise ValueError(f"batch parse mismatch: expected {len(texts)}, got {len(parsed)}")
+
+    return [parsed[i] for i in range(1, len(texts) + 1)]
+
+def contains_cjk(text):
+    return bool(re.search(r'[\u4e00-\u9fff]', text or ""))
+
+def should_retry_translation(original, translated, target_lang):
+    """Heuristic: detect likely untranslated English output for zh targets."""
+    if not target_lang.startswith("zh"):
+        return False
+
+    original = (original or "").strip()
+    translated = (translated or "").strip()
+
+    if not translated:
+        return True
+    if translated.lower() == original.lower():
+        return True
+
+    letter_chunks = re.findall(r'[A-Za-z\u4e00-\u9fff]', translated)
+    total_letters = len(letter_chunks)
+    en_letters = len(re.findall(r'[A-Za-z]', translated))
+    en_ratio = (en_letters / total_letters) if total_letters else 0
+
+    # Pure English output or mostly English mixed output
+    if not contains_cjk(translated) and en_letters >= 6:
+        return True
+    if contains_cjk(translated) and en_letters >= 10 and en_ratio > 0.65:
+        return True
+
+    return False
+
+def retranslate_if_needed(original_text, translated_text, target_lang):
+    """Retry untranslated lines with single-line translation fallback chain."""
+    if not should_retry_translation(original_text, translated_text, target_lang):
+        return translated_text, False
+
+    retry_text = translate_text(original_text, target_lang)
+    if not should_retry_translation(original_text, retry_text, target_lang):
+        return retry_text, True
+
+    return retry_text, True
+
+def translate_batch(texts, target_lang):
+    """Translate a list of lines with Claude batch and single-line fallback."""
+    if not texts:
+        return []
+    if len(texts) == 1:
+        return [translate_text(texts[0], target_lang)]
+
     try:
-        url = "https://translate.googleapis.com/translate_a/t"
-        params = {
-            'client': 'gtx',
-            'sl': 'auto',
-            'tl': target_lang.split('-')[0],
-            'dt': 't',
-            'q': text
-        }
-        response = requests.get(url, params=params, timeout=10)
-        result = response.json()
-
-        if isinstance(result, list) and len(result) > 0:
-            translation_parts = []
-            for item in result:
-                if isinstance(item, list) and len(item) > 0:
-                    translation_parts.append(item[0])
-            if translation_parts:
-                return ''.join(translation_parts)
-
-        return text
+        return translate_batch_with_claude(texts, target_lang)
     except Exception as e:
-        print(f"    翻译失败：{e}")
+        print(f"    批量翻译失败，回退逐条 Claude：{e}")
+        return [translate_text(text, target_lang) for text in texts]
+
+def load_medical_vocab():
+    """Load medical vocabulary from config file"""
+    vocab = {}
+    vocab_file = "$BASE_DIR/config/medical_vocab.txt"
+    if os.path.exists(vocab_file):
+        with open(vocab_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    if ',' in line:
+                        en, zh = line.split(',', 1)
+                        vocab[en.strip().lower()] = zh.strip()
+    return vocab
+
+def post_process_translation(text, vocab):
+    """Post-process translation to replace remaining English terms"""
+    if not vocab:
         return text
+
+    # Sort by length (longer first) to avoid partial replacements
+    sorted_terms = sorted(vocab.keys(), key=len, reverse=True)
+
+    result = text
+    for en_term in sorted_terms:
+        # Case-insensitive replacement
+        pattern = re.compile(re.escape(en_term), re.IGNORECASE)
+        if pattern.search(result):
+            zh_translation = vocab[en_term]
+            result = pattern.sub(zh_translation, result)
+
+    # Also clean up common leftover English words
+    common_leftovers = {
+        r'\babout\b': '关于',
+        r'\bfrom\b': '从',
+        r'\bthis\b': '这个',
+        r'\bthat\b': '那个',
+        r'\bthese\b': '这些',
+        r'\bthose\b': '那些',
+        r'\bwith\b': '与',
+        r'\binto\b': '进入',
+        r'\bthrough\b': '通过',
+        r'\bbetween\b': '之间',
+        r'\bamong\b': '在...之中',
+        r'\bconcept of\b': '...的概念',
+        r'\btype of\b': '...类型',
+        r'\bkind of\b': '种类',
+    }
+    for pattern, replacement in common_leftovers.items():
+        result = re.sub(pattern, replacement, result, flags=re.IGNORECASE)
+
+    # Fix common translation errors for medical terms
+    wrong_translations = {
+        '机械动力': '机械能',
+        '预防绒毛': '预防呼吸机诱导肺损伤',
+        '隧道容量': '潮气量',
+        '窥视': '呼气末正压',
+        '低台容积通气': '低潮气量通气',
+        '呼吸机引起的肺损伤': '呼吸机诱导的肺损伤',
+        '新英格兰杂志': '新英格兰医学杂志',
+        '能源概念': '能量概念',
+    }
+    for wrong, right in wrong_translations.items():
+        result = result.replace(wrong, right)
+
+    return result
 
 def parse_srt(srt_content):
     """Parse SRT content into blocks"""
@@ -807,37 +1059,62 @@ with open("$SRT_FILE", 'r', encoding='utf-8', errors='ignore') as f:
 blocks = parse_srt(srt_content)
 print(f"  共 {len(blocks)} 条字幕")
 
+# Load medical vocabulary for post-processing
+vocab = load_medical_vocab()
+if vocab:
+    print(f"  已加载 {len(vocab)} 个医学词汇用于后处理")
+
 translated_blocks = []
 original_blocks = []
 start_time = __import__('time').time()
+for block in blocks:
+    original_blocks.append({
+        'index': block['index'],
+        'time': block['time'],
+        'text': list(block['text']),
+    })
+    translated_blocks.append({
+        'index': block['index'],
+        'time': block['time'],
+        'text': list(block['text']),
+    })
 
-for i, block in enumerate(blocks):
-    original_text = ' '.join(block['text'])
-    original_blocks.append(block.copy())
+translatable = []
+for idx, block in enumerate(blocks):
+    original_text = ' '.join(block['text']).strip()
+    if len(original_text) >= 2:
+        translatable.append((idx, original_text))
 
-    # Skip very short texts
-    if len(original_text.strip()) < 2:
-        translated_blocks.append(block)
-        continue
+total = len(translatable)
+retried_lines = 0
+if total == 0:
+    print("  无需翻译的有效字幕内容")
+else:
+    for start in range(0, total, BATCH_SIZE):
+        batch_items = translatable[start:start + BATCH_SIZE]
+        batch_texts = [item[1] for item in batch_items]
 
-    # Translate
-    elapsed = __import__('time').time() - start_time
-    avg_time = elapsed / (i + 1) if i > 0 else 0
-    remaining = (len(blocks) - i - 1) * avg_time
-    progress = (i + 1) / len(blocks) * 100
-    print(f"    翻译 {i+1}/{len(blocks)} ({progress:.1f}%) - 剩余 {remaining:.0f}s   ", end='\r', flush=True)
-    translated_text = translate_text(original_text, "$TARGET_LANG")
+        translated_texts = translate_batch(batch_texts, "$TARGET_LANG")
 
-    # Update block - always store Chinese-only for TTS compatibility
-    # Bilingual display will be handled by merge.sh when creating ASS subtitles
-    block['text'] = [translated_text]
-    translated_blocks.append(block)
+        for (block_idx, original_text), translated_text in zip(batch_items, translated_texts):
+            translated_text, retried = retranslate_if_needed(original_text, translated_text, "$TARGET_LANG")
+            if retried:
+                retried_lines += 1
+            translated_text = post_process_translation(translated_text, vocab)
+            # Always store Chinese-only for TTS compatibility.
+            translated_blocks[block_idx]['text'] = [translated_text]
 
-    # Rate limiting (only for Google Translate)
-    if TRANSLATE_METHOD != "claude":
-        time.sleep(0.5)
+        processed = start + len(batch_items)
+        elapsed = __import__('time').time() - start_time
+        avg_time = elapsed / processed if processed else 0
+        remaining = (total - processed) * avg_time
+        progress = processed / total * 100
+        print(f"    翻译 {processed}/{total} ({progress:.1f}%) - 剩余 {remaining:.0f}s   ", end='\r', flush=True)
+
 
 print(f"\n  翻译完成！")
+if retried_lines > 0:
+    print(f"  自动补翻英文残留：{retried_lines} 条")
 
 # Write translated SRT
 output_file = "$BASE_NAME.$TARGET_LANG.srt"
