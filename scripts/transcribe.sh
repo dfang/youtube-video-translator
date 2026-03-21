@@ -762,6 +762,10 @@ ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic
 TARGET_LANG_CODE = "$TARGET_LANG"
 BATCH_SIZE = int(os.environ.get("TRANSLATE_BATCH_SIZE", "12"))
 USER_MODEL = os.environ.get("ANTHROPIC_MODEL", "").strip()
+TRANSLATE_TIMEOUT_SINGLE = int(os.environ.get("TRANSLATE_TIMEOUT_SINGLE", "120"))
+TRANSLATE_TIMEOUT_BATCH = int(os.environ.get("TRANSLATE_TIMEOUT_BATCH", "360"))
+TRANSLATE_RETRY_TIMES = int(os.environ.get("TRANSLATE_RETRY_TIMES", "3"))
+TRANSLATE_RETRY_BACKOFF_SEC = float(os.environ.get("TRANSLATE_RETRY_BACKOFF_SEC", "2"))
 
 def is_dashscope_base(url):
     return "dashscope.aliyuncs.com" in (url or "").lower()
@@ -774,7 +778,7 @@ def build_model_candidates():
         return ["qwen3.5-plus", "qwen3-coder-plus", "qwen-plus", "qwen-max", "kimi-k2-250711", "glm-4.6"]
     return ["claude-3-5-sonnet-20241022", "claude-3-7-sonnet-20250219"]
 
-def call_anthropic_compatible(prompt, model, max_tokens=1024, timeout=30):
+def call_anthropic_compatible(prompt, model, max_tokens=1024, timeout=90):
     """Call Anthropic-compatible /v1/messages endpoint."""
     base = ANTHROPIC_BASE_URL.rstrip("/")
     url = f"{base}/v1/messages"
@@ -798,23 +802,41 @@ def call_anthropic_compatible(prompt, model, max_tokens=1024, timeout=30):
     ]
 
     errors = []
-    for headers in attempts:
-        try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
-            if resp.status_code >= 400:
-                body = resp.text[:600].replace("\n", " ")
-                errors.append(f"{resp.status_code} {body}")
-                continue
+    retryable_http = {408, 409, 425, 429, 500, 502, 503, 504}
+    total_attempts = max(1, TRANSLATE_RETRY_TIMES)
 
-            result = resp.json()
-            content = result.get("content", [])
-            if content and isinstance(content, list):
-                text = content[0].get("text", "").strip()
-                if text:
-                    return text
-            errors.append(f"invalid response: {str(result)[:300]}")
-        except Exception as e:
-            errors.append(str(e))
+    for attempt in range(1, total_attempts + 1):
+        attempt_had_retryable = False
+        for headers in attempts:
+            try:
+                resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+                if resp.status_code >= 400:
+                    body = resp.text[:600].replace("\n", " ")
+                    errors.append(f"{resp.status_code} {body}")
+                    if resp.status_code in retryable_http:
+                        attempt_had_retryable = True
+                    continue
+
+                result = resp.json()
+                content = result.get("content", [])
+                if content and isinstance(content, list):
+                    text = content[0].get("text", "").strip()
+                    if text:
+                        return text
+                errors.append(f"invalid response: {str(result)[:300]}")
+            except requests.exceptions.Timeout:
+                attempt_had_retryable = True
+                errors.append(f"timeout>{timeout}s")
+            except requests.exceptions.ConnectionError as e:
+                attempt_had_retryable = True
+                errors.append(f"connection_error: {str(e)}")
+            except Exception as e:
+                errors.append(str(e))
+
+        if attempt_had_retryable and attempt < total_attempts:
+            sleep_sec = TRANSLATE_RETRY_BACKOFF_SEC * (2 ** (attempt - 1))
+            print(f"    翻译请求超时/临时失败，{sleep_sec:.1f}s 后重试（{attempt+1}/{total_attempts}）")
+            time.sleep(sleep_sec)
 
     raise RuntimeError(" | ".join(errors[-2:]))
 
@@ -852,7 +874,7 @@ def translate_with_claude(text, target_lang):
 
 中文翻译："""
 
-        return call_llm_api(prompt, max_tokens=1024, timeout=30)
+        return call_llm_api(prompt, max_tokens=1024, timeout=TRANSLATE_TIMEOUT_SINGLE)
     except Exception as e:
         raise RuntimeError(f"LLM 翻译失败: {e}")
 
@@ -883,7 +905,7 @@ def translate_batch_with_claude(texts, target_lang):
 [2] 第二行译文
 ..."""
 
-    output = call_llm_api(prompt, max_tokens=4096, timeout=60)
+    output = call_llm_api(prompt, max_tokens=4096, timeout=TRANSLATE_TIMEOUT_BATCH)
 
     parsed = {}
     for line in output.splitlines():
