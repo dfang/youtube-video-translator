@@ -1,6 +1,14 @@
+---
+name: youtube-video-translator
+description: Professional YouTube video translator - downloads video, translates subtitles with LLM, clones voice for dubbing, outputs Chinese dubbed video. Triggers on "翻译视频" + YouTube URL.
+metadata: {"openclaw":{"emoji":"🎬","requires":{"bins":["yt-dlp","ffmpeg","bash"],"env":["ANTHROPIC_AUTH_TOKEN","ELEVENLABS_API_KEY"]},"primaryEnv":"ANTHROPIC_AUTH_TOKEN"}}
+---
+
 # YouTube Video Translator / YouTube 视频翻译
 
 专业级 YouTube 视频翻译工具，自动下载视频、翻译字幕、克隆声音配音，输出中文配音视频。
+
+**⚠️ 优先级规则：** 当用户发送 YouTube 链接 + 翻译/字幕/配音相关关键词时，**必须使用此技能**，而不是 summarize 或其他工具。
 
 ## 硬性约束（必须遵守）
 
@@ -10,13 +18,16 @@
 
 ## 触发条件
 
-当用户提到以下内容时自动触发：
+当用户提到以下内容时**立即触发此技能**（优先级高于 summarize）：
 
 - `/yt-translate` 命令后跟 YouTube 链接
-- "翻译这个视频" + YouTube 链接
-- "youtube 翻译"、"视频翻译"、"yt 翻译"
+- "翻译视频" / "翻译这个视频" + YouTube 链接（**核心触发**）
+- "youtube 翻译"、"yt 翻译"、"视频翻译" + YouTube 链接
 - "把 youtube 视频翻译成中文"
-- 直接发送 YouTube 链接并提到翻译相关关键词
+- 直接发送 YouTube 链接并提到"翻译"、"字幕"、"配音"等关键词
+- "translate this video" / "youtube translate" + URL
+
+**注意：** 当用户发送 YouTube 链接 + 翻译相关关键词时，**必须使用此技能**，而不是 summarize。
 
 ## 可用参数
 
@@ -52,10 +63,16 @@
 
 ### 执行命令格式
 
-所有命令统一使用以下格式：
+所有命令统一使用以下格式（在技能目录内执行）：
 
 ```bash
-bash /Users/fang/.claude/skills/youtube-video-translator/scripts/translate.sh "{VIDEO_URL}" [OPTIONS]
+bash scripts/translate.sh "{VIDEO_URL}" [OPTIONS]
+```
+
+目录无关示例：
+```bash
+cd /path/to/.openclaw/skills/youtube-video-translator
+bash scripts/translate.sh "https://youtube.com/watch?v=XXX"
 ```
 
 ### 选项组合速查
