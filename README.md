@@ -55,6 +55,18 @@ pip3 install edge-tts
 
 ## 高级用法
 
+### Telegram 进度回报（默认开启）
+`translate.sh` 默认会输出机器可解析的进度事件（适合 Telegram 机器人）：
+
+```text
+TG_PROGRESS|<step>|<total>|<status>|<description>
+```
+
+如需关闭，显式设置：
+```bash
+TELEGRAM_PROGRESS=0
+```
+
 ### 清理中间文件
 ```
 /yt-translate <URL> --cleanup

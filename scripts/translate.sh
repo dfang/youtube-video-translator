@@ -126,11 +126,15 @@ echo ""
 mkdir -p "$WORK_DIR"
 cd "$WORK_DIR"
 
+# Enable Telegram-style progress output by default.
+# Set TELEGRAM_PROGRESS=0 to disable explicitly.
+TELEGRAM_PROGRESS="${TELEGRAM_PROGRESS:-1}"
+
 # Progress output mode:
 # - interactive TTY: keep single-line refresh
 # - non-interactive/Telegram: print newline events for each step update
 PROGRESS_EVENT_MODE=false
-if [[ ! -t 1 || -n "$TELEGRAM_PROGRESS" || -n "$TELEGRAM_CHAT_ID" ]]; then
+if [[ "$TELEGRAM_PROGRESS" != "0" || ! -t 1 || -n "$TELEGRAM_CHAT_ID" ]]; then
     PROGRESS_EVENT_MODE=true
 fi
 

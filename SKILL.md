@@ -15,6 +15,7 @@ metadata: {"openclaw":{"emoji":"🎬","requires":{"bins":["yt-dlp","ffmpeg","bas
 - 英文字幕翻译 **必须使用大模型 API**（Anthropic 兼容接口，如 Anthropic 官方或阿里云 Coding Plan）。
 - **严禁使用 Google Translate**（包括任何 fallback / 降级路径）。
 - 若未配置大模型鉴权（如 `ANTHROPIC_AUTH_TOKEN`）或模型不可用，必须直接报错并停止，不输出半成品翻译结果。
+- 任务执行时默认开启进度事件输出（`TELEGRAM_PROGRESS=1`），仅在显式设置 `TELEGRAM_PROGRESS=0` 时关闭。
 
 ## 触发条件
 
