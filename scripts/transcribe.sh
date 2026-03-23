@@ -760,12 +760,12 @@ BASE_DIR = "$BASE_DIR"
 ANTHROPIC_AUTH_TOKEN = os.environ.get("ANTHROPIC_AUTH_TOKEN", "")
 ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
 TARGET_LANG_CODE = "$TARGET_LANG"
-BATCH_SIZE = int(os.environ.get("TRANSLATE_BATCH_SIZE", "12"))
+BATCH_SIZE = int(os.environ.get("TRANSLATE_BATCH_SIZE", "6"))
 USER_MODEL = os.environ.get("ANTHROPIC_MODEL", "").strip()
-TRANSLATE_TIMEOUT_SINGLE = int(os.environ.get("TRANSLATE_TIMEOUT_SINGLE", "120"))
-TRANSLATE_TIMEOUT_BATCH = int(os.environ.get("TRANSLATE_TIMEOUT_BATCH", "360"))
-TRANSLATE_RETRY_TIMES = int(os.environ.get("TRANSLATE_RETRY_TIMES", "3"))
-TRANSLATE_RETRY_BACKOFF_SEC = float(os.environ.get("TRANSLATE_RETRY_BACKOFF_SEC", "2"))
+TRANSLATE_TIMEOUT_SINGLE = int(os.environ.get("TRANSLATE_TIMEOUT_SINGLE", "90"))
+TRANSLATE_TIMEOUT_BATCH = int(os.environ.get("TRANSLATE_TIMEOUT_BATCH", "240"))
+TRANSLATE_RETRY_TIMES = int(os.environ.get("TRANSLATE_RETRY_TIMES", "2"))
+TRANSLATE_RETRY_BACKOFF_SEC = float(os.environ.get("TRANSLATE_RETRY_BACKOFF_SEC", "1.5"))
 
 def is_dashscope_base(url):
     return "dashscope.aliyuncs.com" in (url or "").lower()
@@ -820,7 +820,15 @@ def call_anthropic_compatible(prompt, model, max_tokens=1024, timeout=90):
                 result = resp.json()
                 content = result.get("content", [])
                 if content and isinstance(content, list):
-                    text = content[0].get("text", "").strip()
+                    # Find the text block (skip thinking blocks from Aliyun)
+                    text = ""
+                    for block in content:
+                        if block.get("type") == "text":
+                            text = block.get("text", "").strip()
+                            break
+                    # Fallback to first block if no text type found
+                    if not text and len(content) > 0:
+                        text = content[0].get("text", "").strip()
                     if text:
                         return text
                 errors.append(f"invalid response: {str(result)[:300]}")
@@ -840,7 +848,7 @@ def call_anthropic_compatible(prompt, model, max_tokens=1024, timeout=90):
 
     raise RuntimeError(" | ".join(errors[-2:]))
 
-def call_llm_api(prompt, max_tokens=1024, timeout=120):
+def call_llm_api(prompt, max_tokens=4096, timeout=240):
     """Try candidate models until one works."""
     errors = []
     for model in build_model_candidates():
@@ -1024,7 +1032,6 @@ def post_process_translation(text, vocab):
 
     # Fix common translation errors for medical terms
     wrong_translations = {
-        '机械动力': '机械能',
         '预防绒毛': '预防呼吸机诱导肺损伤',
         '隧道容量': '潮气量',
         '窥视': '呼气末正压',

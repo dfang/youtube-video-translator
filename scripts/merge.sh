@@ -104,7 +104,7 @@ else:
             '-f', 'concat',
             '-safe', '0',
             '-i', concat_file,
-            '-c', 'copy',
+            '-c:a', 'libmp3lame', '-b:a', '192k',
             f"$BASE_NAME.zh-CN.merged.mp3"
         ], check=True, capture_output=True)
     else:
