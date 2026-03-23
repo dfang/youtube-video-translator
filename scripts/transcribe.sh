@@ -762,6 +762,7 @@ ANTHROPIC_BASE_URL = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic
 TARGET_LANG_CODE = "$TARGET_LANG"
 BATCH_SIZE = int(os.environ.get("TRANSLATE_BATCH_SIZE", "6"))
 USER_MODEL = os.environ.get("ANTHROPIC_MODEL", "").strip()
+TRANSLATE_MODE = os.environ.get("TRANSLATE_MODE", "line").strip().lower()
 TRANSLATE_TIMEOUT_SINGLE = int(os.environ.get("TRANSLATE_TIMEOUT_SINGLE", "90"))
 TRANSLATE_TIMEOUT_BATCH = int(os.environ.get("TRANSLATE_TIMEOUT_BATCH", "240"))
 TRANSLATE_RETRY_TIMES = int(os.environ.get("TRANSLATE_RETRY_TIMES", "2"))
@@ -1119,26 +1120,43 @@ retried_lines = 0
 if total == 0:
     print("  无需翻译的有效字幕内容")
 else:
-    for start in range(0, total, BATCH_SIZE):
-        batch_items = translatable[start:start + BATCH_SIZE]
-        batch_texts = [item[1] for item in batch_items]
+    if TRANSLATE_MODE == "batch":
+        print(f"  翻译模式：批量（batch_size={BATCH_SIZE}）")
+        for start in range(0, total, BATCH_SIZE):
+            batch_items = translatable[start:start + BATCH_SIZE]
+            batch_texts = [item[1] for item in batch_items]
 
-        translated_texts = translate_batch(batch_texts, "$TARGET_LANG")
+            translated_texts = translate_batch(batch_texts, "$TARGET_LANG")
 
-        for (block_idx, original_text), translated_text in zip(batch_items, translated_texts):
+            for (block_idx, original_text), translated_text in zip(batch_items, translated_texts):
+                translated_text, retried = retranslate_if_needed(original_text, translated_text, "$TARGET_LANG")
+                if retried:
+                    retried_lines += 1
+                translated_text = post_process_translation(translated_text, vocab)
+                # Always store Chinese-only for TTS compatibility.
+                translated_blocks[block_idx]['text'] = [translated_text]
+
+            processed = start + len(batch_items)
+            elapsed = __import__('time').time() - start_time
+            avg_time = elapsed / processed if processed else 0
+            remaining = (total - processed) * avg_time
+            progress = processed / total * 100
+            print(f"    翻译 {processed}/{total} ({progress:.1f}%) - 剩余 {remaining:.0f}s   ", end='\r', flush=True)
+    else:
+        print("  翻译模式：逐条（line，默认，稳定优先）")
+        for i, (block_idx, original_text) in enumerate(translatable, 1):
+            translated_text = translate_text(original_text, "$TARGET_LANG")
             translated_text, retried = retranslate_if_needed(original_text, translated_text, "$TARGET_LANG")
             if retried:
                 retried_lines += 1
             translated_text = post_process_translation(translated_text, vocab)
-            # Always store Chinese-only for TTS compatibility.
             translated_blocks[block_idx]['text'] = [translated_text]
 
-        processed = start + len(batch_items)
-        elapsed = __import__('time').time() - start_time
-        avg_time = elapsed / processed if processed else 0
-        remaining = (total - processed) * avg_time
-        progress = processed / total * 100
-        print(f"    翻译 {processed}/{total} ({progress:.1f}%) - 剩余 {remaining:.0f}s   ", end='\r', flush=True)
+            elapsed = __import__('time').time() - start_time
+            avg_time = elapsed / i if i else 0
+            remaining = (total - i) * avg_time
+            progress = i / total * 100
+            print(f"    翻译 {i}/{total} ({progress:.1f}%) - 剩余 {remaining:.0f}s   ", end='\r', flush=True)
 
 
 print(f"\n  翻译完成！")
