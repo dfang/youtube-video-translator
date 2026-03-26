@@ -1,0 +1,26 @@
+{
+  "skill_name": "YouTube-Video-Translator",
+  "evals": [
+    {
+      "id": 1,
+      "name": "Standard Translation",
+      "prompt": "翻译这个视频 https://www.youtube.com/watch?v=aqz-KE-bpKQ，我需要中文配音和双语字幕。",
+      "expected_output": "生成的 final_video.mp4 包含中文配音且字幕为中英双语（英上中下，白色16号字体）。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "WhisperX Transcription",
+      "prompt": "翻译这个视频 https://www.youtube.com/watch?v=5EqB3U0O6bA。这个视频没有官方英文字幕，请使用 WhisperX 转录后再翻译。",
+      "expected_output": "成功通过 WhisperX 获取文本并翻译成中文，最终产出带中文字幕的视频。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "Checkpoint Check",
+      "prompt": "翻译视频 https://www.youtube.com/watch?v=aqz-KE-bpKQ，并最后进行清理。注意：raw_video.mp4 已经下载在 translations/aqz-KE-bpKQ/temp/ 文件夹下了，请跳过下载步骤直接开始翻译。",
+      "expected_output": "Skill 识别出视频已存在，直接进入字幕处理阶段，任务完成后 temp/ 文件夹被删除。",
+      "files": []
+    }
+  ]
+}
