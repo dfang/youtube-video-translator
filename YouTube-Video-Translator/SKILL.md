@@ -27,9 +27,10 @@ Before executing each step, check if the relevant files already exist.
 3. Donwload video from youtube
 4. Process subtitles
 5. Generate voiceover
-6. Compose video
-7. Publish to Bilibili
-8. Clean up
+6. Process cover
+7. Compose video
+8. Publish to Bilibili
+9. Clean up
 
 ### 1. Gathering intents Phase
 
@@ -40,8 +41,9 @@ Ask user in Chinese, and print user intents in Chinese:
 - bilingual subtitles or chinese subtitle only (default)
 - publish to Bilibili (default)
 - clean up or not (default)
+- **Localized Title Confirmation**: Propose 2-3 short, catchy Chinese titles for the video and cover based on the original metadata. Ask the user to select one or provide a custom one.
 
-**Confirmation Step**: After gathering and summarizing all intents, you **MUST** ask the user if they are ready to proceed (e.g., "确认开始翻译吗？") and wait for their confirmation before moving to the Setup Phase.
+**Confirmation Step**: After gathering and summarizing all intents (including the chosen Chinese title), you **MUST** ask the user if they are ready to proceed (e.g., "确认开始翻译吗？") and wait for their confirmation before moving to the Setup Phase.
 
 ### 2. Setup Phase
 
@@ -94,13 +96,29 @@ Ask user in Chinese, and print user intents in Chinese:
 - **Audio Alignment (Speed-to-Fit)**: If the generated TTS duration exceeds the original segment duration, the script must automatically speed up the audio (using FFmpeg `atempo` or TTS engine parameters) up to a maximum of 1.25x.
 - **Execution**: Call `scripts/voiceover_tts.py [zh_translated.srt]`.
 
-### 6. Video Composer Phase
+### 6. Cover Process Phase
+
+- **Goal**: Generate a high-quality localized cover image using the title confirmed in Phase 1.
+- **Status Check**: Check if `./translations/[Video_ID]/final/cover_final.jpg` exists.
+- **Execution Logic**:
+  1. **Source Extraction**: Attempt to download the highest resolution thumbnail from YouTube. If restricted, extract a keyframe from `raw_video.mp4` at approximately 30 seconds.
+  2. **Localized Design**: Call `scripts/cover_generator.py` using the confirmed Chinese title.
+     - **Output Destination**: The resulting image MUST be saved as `./translations/[Video_ID]/final/cover_final.jpg`.
+     - The script must automatically calculate optimal font sizes to prevent text overflow.
+     - Add a semi-transparent dark overlay to ensure text readability.
+     - Position the title and speaker information in the vertical center for optimal visual balance.
+  3. **Verification**: Ensure the final image is 16:9 and saved as `cover_final.jpg`.
+
+### 7. Video Composer Phase
 
 - **Goal**: Composite video, voiceover, and subtitles.
 - **Status Check**: Check if `./translations/[Video_ID]/final/final_video.mp4` exists.
 - **Execution**: Call `scripts/video_muxer.py`.
+- **Metadata (Optional)**: If a localized cover exists, attach it as the video's thumbnail using FFmpeg's `attached_pic` disposition.
 
-### 7. Bilibili Publisher Phase
+### 8. Bilibili Publisher Phase
+
+... (rest of the file)
 
 - **Trigger Condition**: User mentions "publish to Bilibili", "post", or "save draft".
 - **Goal**: Publish the final product to the Bilibili Creator Center via browser automation.
