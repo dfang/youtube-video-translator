@@ -15,6 +15,7 @@ def download_video(url, output_dir):
     print(f"正在获取视频信息: {url}...")
     subprocess.run([
         "yt-dlp", "--skip-download", "--write-info-json",
+        "--cookies-from-browser", "chrome",
         "-o", os.path.join(output_dir, "info"), url
     ], check=True)
 
@@ -24,6 +25,7 @@ def download_video(url, output_dir):
         print("正在下载原始视频...")
         subprocess.run([
             "yt-dlp", "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            "--cookies-from-browser", "chrome",
             "-o", video_path, url
         ], check=True)
     else:
@@ -33,6 +35,7 @@ def download_video(url, output_dir):
     print("正在检查官方字幕...")
     subprocess.run([
         "yt-dlp", "--skip-download", "--write-subs", "--sub-langs", "en.*",
+        "--cookies-from-browser", "chrome",
         "--convert-subs", "srt", "-o", os.path.join(output_dir, "en_official"), url
     ])
 

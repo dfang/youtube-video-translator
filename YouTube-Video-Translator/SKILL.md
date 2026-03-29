@@ -45,8 +45,10 @@ Ask user in Chinese, and print user intents in Chinese:
 
 ### 2. Setup Phase
 
+- Print user intents in Chinese
 - Parse the YouTube URL to obtain the `Video_ID`.
 - Create the directory structure: `./translations/[Video_ID]/temp/`.
+- **Traceability**: Save the original YouTube URL into `./translations/[Video_ID]/temp/url.txt`.
 - If raw_video.mp4 exists, skip this phase, inform user that the video is already downloaded, go to subtitle processing phase.
 
 ### 3. Video Downloading Phase
@@ -57,29 +59,36 @@ Ask user in Chinese, and print user intents in Chinese:
 
 ### 4. Subtitle Processing Phase
 
-- **Goal**: Obtain source subtitles and translate them into Chinese according to user intent.
-- **Status Check**: Check if `./translations/[Video_ID]/temp/bilingual.ass` or `./translations/[Video_ID]/temp/chinese_only.ass` exists.
+- **Goal**: Obtain source subtitles and translate them into Chinese with high precision and visual comfort.
+- **Status Check**: Check if `./translations/[Video_ID]/temp/bilingual.ass` exists.
 - **Execution Logic**:
   1. **Source Selection**:
-     - If user intent is **Download**: Attempt to download official subtitles using `yt-dlp --write-subs`. Fall back to transcription only if download fails and user permits.
-     - If user intent is **Transcribe**: Run `scripts/whisperx_transcriber.py` directly.
-  2. **Translation**: Call **LLM (Anthropic/OpenAI)** to translate the English content into Chinese, using the video title and description as context.
-  3. **Output Generation**:
-     - **Bilingual (English/Chinese)**: Generate a `.ass` file with English on top and Chinese on bottom.
-     - **Chinese Only**: Generate a `.ass` file with only Chinese text.
-  4. **Mandatory Requirement**:
-     - Font size 16, color white.
-     - **Line Length Management**: If a translated line is too long (e.g., >20 Chinese characters or >40 English characters), use `\N` for a manual line break or request the LLM to split the content into two shorter, balanced lines.
-     - Refer to `references/ass_template.txt` for the format template.
+     - If user intent is **Download**: Attempt `yt-dlp --write-subs`. Fall back to transcription if failed.
+     - If user intent is **Transcribe**: Run `scripts/whisperx_transcriber.py`.
+  2. **Context & Glossary Pre-process (Mandatory)**:
+     - Extract key medical/technical terms from `info.json` title and description.
+     - Create a **Local Glossary** (e.g., "VILI -> 呼吸机诱导的肺损伤", "PEEP -> 呼气末正压") to prime the LLM.
+  3. **Batch Translation Strategy (For Videos > 10 mins)**:
+     - **Constraint**: To prevent LLM context truncation or file write limits, subtitles MUST be translated in batches of ~50 segments.
+     - **Verification**: After each batch, verify the line count matches the source segment count.
+  4. **Translation Guidelines**:
+     - **Acronym Preservation**: Keep critical acronyms (e.g., PEEP, ARDS) but provide Chinese explanation on first appearance.
+     - **Conciseness (CPS Control)**: If Reading Speed (CPS) > 15 chars/sec, LLM must summarize or condense.
+  5. **Physical Splitting & Formatting (Strict Enforcement)**:
+     - **Hard Split (Time)**: Any segment > 8 seconds MUST be logically split into multiple chronological segments (e.g., a 20s segment should be split into 4-5 sub-segments).
+     - **Hard Split (Length)**: Any single line > 25 Chinese characters MUST be split into two separate chronological segments OR use `\N` for a manual break if the duration is short.
+     - **Readability (CPS Control)**: Maintain a target Reading Speed (CPS) of 10-15 chars/sec. If the translation is too long for the given duration, the LLM MUST summarize or use professional paraphrasing to shorten the text while preserving the core medical meaning.
+     - **Visual Balance**: Always use English on top and Chinese on bottom via `\N`. Font size 14-16, color white.
+  6. **Consistency Check**: Final `.ass` must be scanned for any remaining untranslated English lines or sequence gaps.
 
 ### 5. Voiceover Engine Phase
 
 - **Goal**: Generate Chinese voiceover audio.
 - **Status Check**: Check if `./translations/[Video_ID]/temp/zh_voiceover.mp3` exists.
 - **Execution Logic**:
-  - **Skip Condition**: If the user intent is "keep original audio", skip this phase entirely and use the original audio track during composition.
-  - **Default**: Defaults to "Chinese voiceover" unless the user explicitly requests "original audio".
-  - **Execution**: Call `scripts/voiceover_tts.py [zh_translated.srt]`.
+- **Skip Condition**: If the user intent is "keep original audio", skip this phase entirely.
+- **Audio Alignment (Speed-to-Fit)**: If the generated TTS duration exceeds the original segment duration, the script must automatically speed up the audio (using FFmpeg `atempo` or TTS engine parameters) up to a maximum of 1.25x.
+- **Execution**: Call `scripts/voiceover_tts.py [zh_translated.srt]`.
 
 ### 6. Video Composer Phase
 
