@@ -11,12 +11,12 @@ def download_video(url, output_dir):
         os.makedirs(output_dir)
 
     # 1. 获取视频信息 (JSON)
-    info_path = os.path.join(output_dir, "info.json")
+    info_path = os.path.join(output_dir, "video.info.json")
     print(f"正在获取视频信息: {url}...")
     subprocess.run([
         "yt-dlp", "--skip-download", "--write-info-json",
         "--cookies-from-browser", "chrome",
-        "-o", os.path.join(output_dir, "info"), url
+        "-o", os.path.join(output_dir, "video"), url
     ], check=True)
 
     # 2. 下载原始视频 (优先选择 1080p mp4)

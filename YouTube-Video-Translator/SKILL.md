@@ -22,7 +22,7 @@ This Skill uses a "project-based" management approach. All files are stored unde
 
 Before executing each step, check if the relevant files already exist.
 
-1. Gathering user intents
+1. Gather user intents
 2. Setup basic file structure
 3. Donwload video from youtube
 4. Process subtitles
@@ -65,21 +65,25 @@ Ask user in Chinese, and print user intents in Chinese:
   1. **Source Selection**:
      - If user intent is **Download**: Attempt `yt-dlp --write-subs`. Fall back to transcription if failed.
      - If user intent is **Transcribe**: Run `scripts/whisperx_transcriber.py`.
-  2. **Context & Glossary Pre-process (Mandatory)**:
+  2. **Segmentation Audit (Mandatory Pre-translation)**:
+     - Run `scripts/subtitle_splitter.py` on the raw SRT.
+     - **Thresholds**: Any segment with `Duration > 8.0s` must be split into multiple segments of ~5s.
+     - **Goal**: Prevent LLM from producing massive text blocks and ensure visual comfort.
+  3. **Context & Glossary Pre-process (Mandatory)**:
      - Extract key medical/technical terms from `info.json` title and description.
      - Create a **Local Glossary** (e.g., "VILI -> 呼吸机诱导的肺损伤", "PEEP -> 呼气末正压") to prime the LLM.
-  3. **Batch Translation Strategy (For Videos > 10 mins)**:
+  4. **Batch Translation Strategy (For Videos > 10 mins)**:
      - **Constraint**: To prevent LLM context truncation or file write limits, subtitles MUST be translated in batches of ~50 segments.
      - **Verification**: After each batch, verify the line count matches the source segment count.
-  4. **Translation Guidelines**:
+  5. **Translation Guidelines**:
      - **Acronym Preservation**: Keep critical acronyms (e.g., PEEP, ARDS) but provide Chinese explanation on first appearance.
      - **Conciseness (CPS Control)**: If Reading Speed (CPS) > 15 chars/sec, LLM must summarize or condense.
-  5. **Physical Splitting & Formatting (Strict Enforcement)**:
+  6. **Physical Splitting & Formatting (Strict Enforcement)**:
      - **Hard Split (Time)**: Any segment > 8 seconds MUST be logically split into multiple chronological segments (e.g., a 20s segment should be split into 4-5 sub-segments).
      - **Hard Split (Length)**: Any single line > 25 Chinese characters MUST be split into two separate chronological segments OR use `\N` for a manual break if the duration is short.
      - **Readability (CPS Control)**: Maintain a target Reading Speed (CPS) of 10-15 chars/sec. If the translation is too long for the given duration, the LLM MUST summarize or use professional paraphrasing to shorten the text while preserving the core medical meaning.
      - **Visual Balance**: Always use English on top and Chinese on bottom via `\N`. Font size 14-16, color white.
-  6. **Consistency Check**: Final `.ass` must be scanned for any remaining untranslated English lines or sequence gaps.
+  7. **Consistency Check**: Final `.ass` must be scanned for any remaining untranslated English lines or sequence gaps.
 
 ### 5. Voiceover Engine Phase
 
