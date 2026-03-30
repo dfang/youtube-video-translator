@@ -16,10 +16,17 @@ def get_optimal_font_size(draw, text, font_path, max_width, initial_size):
         w = bbox[2] - bbox[0]
     return font, w, (bbox[3] - bbox[1])
 
-def create_cover(bg_path, output_path, title, subtitle):
+def create_cover(bg_path, output_dir, title, subtitle):
+    """
+    生成封面图，输出固定为 {output_dir}/final/cover_final.jpg
+    """
     if not os.path.exists(bg_path):
         print(f"错误: 找不到底图 {bg_path}")
         return
+
+    final_dir = os.path.join(output_dir, "final")
+    os.makedirs(final_dir, exist_ok=True)
+    output_path = os.path.join(final_dir, "cover_final.jpg")
 
     img = Image.open(bg_path).convert('RGB')
     width, height = img.size
@@ -46,7 +53,7 @@ def create_cover(bg_path, output_path, title, subtitle):
     # 绘制半透明遮罩
     overlay = Image.new('RGBA', img.size, (0,0,0,0))
     d = ImageDraw.Draw(overlay)
-    d.rectangle([0, top_y, width, top_y + overlay_h], fill=(0, 0, 0, 165)) 
+    d.rectangle([0, top_y, width, top_y + overlay_h], fill=(0, 0, 0, 165))
     img = Image.alpha_composite(img.convert('RGBA'), overlay)
     draw = ImageDraw.Draw(img)
 
@@ -66,8 +73,8 @@ if __name__ == "__main__":
         sys.exit(1)
 
     bg = sys.argv[1]
-    out = sys.argv[2]
+    out_dir = sys.argv[2]
     t = sys.argv[3]
     st = sys.argv[4]
 
-    create_cover(bg, out, t, st)
+    create_cover(bg, out_dir, t, st)

@@ -6,12 +6,17 @@ import shutil
 # 优先使用 ffmpeg-full（包含 libass，支持烧录字幕）
 FFMPEG = shutil.which("ffmpeg-full") or shutil.which("ffmpeg") or "ffmpeg"
 
-def create_muxed_video(video_path, audio_path, ass_path, output_path, use_original_audio=False):
+def create_muxed_video(video_path, audio_path, ass_path, output_dir, use_original_audio=False):
     """
     使用 FFmpeg 合成最终视频。
     1. 若 use_original_audio 为 False，则替换音轨。
     2. 烧录 .ass 字幕。
+    输出固定为 {output_dir}/final/final_video.mp4
     """
+    final_dir = os.path.join(output_dir, "final")
+    os.makedirs(final_dir, exist_ok=True)
+    final_output = os.path.join(final_dir, "final_video.mp4")
+
     # 基本命令构建
     ffmpeg_cmd = [FFMPEG, "-i", video_path]
 
@@ -34,12 +39,12 @@ def create_muxed_video(video_path, audio_path, ass_path, output_path, use_origin
     ffmpeg_cmd += [
         "-c:v", "libx264", "-preset", "medium", "-crf", "20",
         "-c:a", "aac", "-b:a", "192k",
-        output_path, "-y"
+        final_output, "-y"
     ]
 
     print(f"正在合成视频: {' '.join(ffmpeg_cmd)}")
     subprocess.run(ffmpeg_cmd, check=True)
-    print(f"合成完成: {output_path}")
+    print(f"合成完成: {final_output}")
 
 if __name__ == "__main__":
     if len(sys.argv) < 5:
@@ -49,7 +54,7 @@ if __name__ == "__main__":
     v_path = sys.argv[1]
     a_path = sys.argv[2]
     sub_path = sys.argv[3]
-    out_path = sys.argv[4]
+    out_dir = sys.argv[4]
     use_original = "--original-audio" in sys.argv
 
-    create_muxed_video(v_path, a_path, sub_path, out_path, use_original)
+    create_muxed_video(v_path, a_path, sub_path, out_dir, use_original)
