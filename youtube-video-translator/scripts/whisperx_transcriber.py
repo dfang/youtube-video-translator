@@ -1,6 +1,10 @@
 import os
 import sys
 import subprocess
+import shutil
+
+# 优先使用 ffmpeg-full（包含 libass，支持烧录字幕）
+FFMPEG = shutil.which("ffmpeg-full") or shutil.which("ffmpeg") or "ffmpeg"
 
 def transcribe_with_whisperx(video_path, output_dir):
     """
@@ -8,11 +12,11 @@ def transcribe_with_whisperx(video_path, output_dir):
     2. 使用 WhisperX 进行转录
     """
     audio_path = os.path.join(output_dir, "original_audio.wav")
-    
+
     # 提取音频
     print("正在提取音频...")
     subprocess.run([
-        "ffmpeg", "-i", video_path, "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", audio_path, "-y"
+        FFMPEG, "-i", video_path, "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", audio_path, "-y"
     ], check=True)
 
     # 运行 WhisperX 转录

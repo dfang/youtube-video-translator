@@ -1,6 +1,10 @@
 import os
 import sys
 import subprocess
+import shutil
+
+# 优先使用 ffmpeg-full（包含 libass，支持烧录字幕）
+FFMPEG = shutil.which("ffmpeg-full") or shutil.which("ffmpeg") or "ffmpeg"
 
 def create_muxed_video(video_path, audio_path, ass_path, output_path, use_original_audio=False):
     """
@@ -9,7 +13,7 @@ def create_muxed_video(video_path, audio_path, ass_path, output_path, use_origin
     2. 烧录 .ass 字幕。
     """
     # 基本命令构建
-    ffmpeg_cmd = ["ffmpeg", "-i", video_path]
+    ffmpeg_cmd = [FFMPEG, "-i", video_path]
 
     if not use_original_audio and audio_path and os.path.exists(audio_path):
         # 替换为中文配音
