@@ -22,6 +22,7 @@ This Skill uses a "project-based" management approach. All files are stored unde
 
 Before executing each step, check if the relevant files already exist.
 
+0. Validate environment
 1. Gather user intents
 2. Setup basic file structure
 3. Donwload video from youtube
@@ -31,6 +32,15 @@ Before executing each step, check if the relevant files already exist.
 7. Compose video
 8. Publish to Bilibili
 9. Clean up
+
+### 0. Environment Validation Phase (Critical)
+
+- **Goal**: Ensure the system has the required tools and libraries to prevent runtime failures.
+- **Action**: Run `python3 scripts/env_check.py`.
+- **Validation Points**:
+  - `ffmpeg` MUST have `libass` support (run `ffmpeg -version` to verify).
+  - All Python dependencies in `requirements.txt` MUST be installed.
+  - If validation fails, provide the user with specific fix commands (e.g., `brew install ffmpeg-full` or `pip install -r requirements.txt`).
 
 ### 1. Gathering intents Phase
 
@@ -110,7 +120,7 @@ Ask user in Chinese, and print user intents in Chinese:
 - **Execution Logic**:
   1. **Source Extraction**: Attempt to download the highest resolution thumbnail from YouTube. If restricted, extract a keyframe from `raw_video.mp4` at approximately 30 seconds.
   2. **Localized Design**: Call `scripts/cover_generator.py` using the confirmed Chinese title.
-     - **Output Destination**: The resulting image MUST be saved as `./translations/[Video_ID]/final/cover_final.jpg`.
+     - **Output Destination**: Pass the full output path as the second argument: `./translations/[Video_ID]/final/cover_final.jpg`. The script does NOT create the `final/` directory automatically — ensure it exists before calling.
      - The script must automatically calculate optimal font sizes to prevent text overflow.
      - Add a semi-transparent dark overlay to ensure text readability.
      - Position the title and speaker information in the vertical center for optimal visual balance.

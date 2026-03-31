@@ -2,13 +2,35 @@ import sys
 import os
 from PIL import Image, ImageDraw, ImageFont
 
+def find_font(preferred_font_name="PingFang.ttc"):
+    # 1. Check local assets/fonts
+    local_path = os.path.join(os.path.dirname(__file__), "..", "assets", "fonts", preferred_font_name)
+    if os.path.exists(local_path):
+        return local_path
+    
+    # 2. Check Common System Paths
+    system_paths = [
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf", # macOS
+        "/System/Library/Fonts/PingFang.ttc",                  # macOS
+        "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf", # Linux
+        "C:\\Windows\\Fonts\\msyh.ttc"                         # Windows
+    ]
+    for p in system_paths:
+        if os.path.exists(p):
+            return p
+    return None
+
 def get_optimal_font_size(draw, text, font_path, max_width, initial_size):
     size = initial_size
+    if not font_path:
+        font = ImageFont.load_default()
+        bbox = draw.textbbox((0, 0), text, font=font)
+        return font, bbox[2] - bbox[0], bbox[3] - bbox[1]
+
     font = ImageFont.truetype(font_path, size)
     bbox = draw.textbbox((0, 0), text, font=font)
     w = bbox[2] - bbox[0]
     
-    # 如果标题太宽，逐步减小字号
     while w > max_width and size > 20:
         size -= 5
         font = ImageFont.truetype(font_path, size)
@@ -16,65 +38,46 @@ def get_optimal_font_size(draw, text, font_path, max_width, initial_size):
         w = bbox[2] - bbox[0]
     return font, w, (bbox[3] - bbox[1])
 
-def create_cover(bg_path, output_dir, title, subtitle):
-    """
-    生成封面图，输出固定为 {output_dir}/final/cover_final.jpg
-    """
+def create_cover(bg_path, output_path, title, subtitle):
     if not os.path.exists(bg_path):
-        print(f"错误: 找不到底图 {bg_path}")
+        print(f"Error: BG image not found at {bg_path}")
         return
 
-    final_dir = os.path.join(output_dir, "final")
-    os.makedirs(final_dir, exist_ok=True)
-    output_path = os.path.join(final_dir, "cover_final.jpg")
+    output_dir = os.path.dirname(output_path)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
 
     img = Image.open(bg_path).convert('RGB')
     width, height = img.size
     draw = ImageDraw.Draw(img)
 
-    # 字体路径适配 (优先使用高清系统字体)
-    font_path = "/System/Library/Fonts/Supplemental/Arial Unicode.ttf"
-    if not os.path.exists(font_path):
-        font_path = "/System/Library/Fonts/PingFang.ttc"
-    if not os.path.exists(font_path):
-        print("警告: 未找到系统级中文字体，可能导致文字显示异常。")
+    font_path = find_font()
+    if not font_path:
+        print("Warning: No suitable Chinese font found. Using default.")
 
-    # 计算自适应字号
-    max_w = int(width * 0.88) # 留出边距
+    max_w = int(width * 0.88)
     title_font, title_w, title_h = get_optimal_font_size(draw, title, font_path, max_w, 130)
     subtitle_font, sub_w, sub_h = get_optimal_font_size(draw, subtitle, font_path, max_w, 55)
 
-    # 计算垂直居中布局
     spacing = 40
     padding = 60
     overlay_h = title_h + spacing + sub_h + (padding * 2)
     top_y = (height - overlay_h) // 2
 
-    # 绘制半透明遮罩
     overlay = Image.new('RGBA', img.size, (0,0,0,0))
     d = ImageDraw.Draw(overlay)
-    d.rectangle([0, top_y, width, top_y + overlay_h], fill=(0, 0, 0, 165))
+    d.rectangle([0, top_y, width, top_y + overlay_h], fill=(0, 0, 0, 165)) 
     img = Image.alpha_composite(img.convert('RGBA'), overlay)
     draw = ImageDraw.Draw(img)
 
-    # 写入文字
     draw.text(((width - title_w) // 2, top_y + padding), title, font=title_font, fill=(255, 230, 0))
     draw.text(((width - sub_w) // 2, top_y + padding + title_h + spacing), subtitle, font=subtitle_font, fill=(255, 255, 255))
 
-    # 保存
     img.convert('RGB').save(output_path, "JPEG", quality=95)
-    print(f"封面生成成功: {output_path} (字号: {title_font.size})")
+    print(f"Cover generated: {output_path}")
 
 if __name__ == "__main__":
-    # 用法: python cover_generator.py [背景图] [输出路径] [标题] [副标题]
     if len(sys.argv) < 5:
-        print("用法说明:")
-        print("python cover_generator.py [BgPath] [OutPath] [Title] [Subtitle]")
+        print("Usage: python cover_generator.py [BgPath] [OutPath] [Title] [Subtitle]")
         sys.exit(1)
-
-    bg = sys.argv[1]
-    out_dir = sys.argv[2]
-    t = sys.argv[3]
-    st = sys.argv[4]
-
-    create_cover(bg, out_dir, t, st)
+    create_cover(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])

@@ -1,10 +1,9 @@
 import os
 import sys
 import subprocess
-import shutil
+from utils import get_ffmpeg_path
 
-# 优先使用 ffmpeg-full（包含 libass，支持烧录字幕）
-FFMPEG = shutil.which("ffmpeg-full") or shutil.which("ffmpeg") or "ffmpeg"
+FFMPEG = get_ffmpeg_path()
 
 def create_muxed_video(video_path, audio_path, ass_path, output_dir, use_original_audio=False):
     """
@@ -16,6 +15,9 @@ def create_muxed_video(video_path, audio_path, ass_path, output_dir, use_origina
     final_dir = os.path.join(output_dir, "final")
     os.makedirs(final_dir, exist_ok=True)
     final_output = os.path.join(final_dir, "final_video.mp4")
+
+    if not FFMPEG:
+        raise RuntimeError("FFmpeg not found. Please install ffmpeg/ffmpeg-full and retry.")
 
     # 基本命令构建
     ffmpeg_cmd = [FFMPEG, "-i", video_path]

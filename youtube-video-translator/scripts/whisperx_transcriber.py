@@ -1,10 +1,10 @@
 import os
 import sys
 import subprocess
-import shutil
+from utils import get_ffmpeg_path
 
-# 优先使用 ffmpeg-full（包含 libass，支持烧录字幕）
-FFMPEG = shutil.which("ffmpeg-full") or shutil.which("ffmpeg") or "ffmpeg"
+# 优先使用具有完整能力的 ffmpeg
+FFMPEG = get_ffmpeg_path()
 
 def transcribe_with_whisperx(video_path, output_dir):
     """
@@ -12,6 +12,9 @@ def transcribe_with_whisperx(video_path, output_dir):
     2. 使用 WhisperX 进行转录
     """
     audio_path = os.path.join(output_dir, "original_audio.wav")
+
+    if not FFMPEG:
+        raise RuntimeError("FFmpeg not found. Please install ffmpeg/ffmpeg-full and retry.")
 
     # 提取音频
     print("正在提取音频...")

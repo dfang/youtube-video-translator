@@ -1,0 +1,5 @@
+pysubs2>=1.8.1
+Pillow>=10.0.0
+whisperx
+yt-dlp
+requests
