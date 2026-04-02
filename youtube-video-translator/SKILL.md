@@ -14,6 +14,24 @@ Translate a YouTube video into Chinese with resumable, file-based phases.
 - Before each phase, announce in Chinese (e.g., `正在进入字幕处理阶段...`).
 - If required output already exists, skip phase and continue.
 
+## Orchestration Model (Hybrid)
+
+- Use **main agent** as orchestrator for end-to-end state management.
+- Use **sub-agents** only for heavy/parallelizable phases.
+- Main agent responsibilities:
+  - Track phase progress and resumable checkpoints
+  - Dispatch sub-agents with strict input/output contracts
+  - Run final gates (`check-batches`, `merge`, `verify`) and decide retries
+- Do **not** force sub-agent usage for every phase; keep simple phases on main agent for stability.
+
+### Delegation Matrix
+
+- Main-agent phases (default): 0, 1, 2, 3, 7, 9
+- Sub-agent preferred phases:
+  - Phase 4 batch translation (parallel by `batch_N.txt`)
+  - Phase 6 cover generation (optional delegation)
+  - Phase 8 publishing (`agent-browser`)
+
 ## Canonical Paths
 
 - Skill root: `$HOME/.openclaw/skills/youtube-video-translator`
@@ -95,20 +113,28 @@ If transcription mode:
   - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" prepare "./translations/[VIDEO_ID]/temp/en_audited.srt" "./translations/[VIDEO_ID]/temp"`
 - Translation model source (A-mode): use the current channel/session primary model directly.
 - Do NOT ask for or require Gemini/OpenAI/Claude API keys in this phase.
+- Dispatch each batch to a translation sub-agent (parallel allowed), contract:
+  - Input: `./translations/[VIDEO_ID]/temp/batch_N.txt`
+  - Output: `./translations/[VIDEO_ID]/temp/batch_N.translated.srt`
+  - Hard rule: keep index/timecode unchanged; no merge/split/drop
 - For each batch file:
   - Build prompt (optional):
     - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" prompt "./translations/[VIDEO_ID]/temp/batch_N.txt" "./translations/[VIDEO_ID]/temp/batch_N.prompt.txt"`
-  - Ask the active agent model to translate the batch and save as:
+  - Save result as:
     - `./translations/[VIDEO_ID]/temp/batch_N.translated.srt`
+- Before merge, enforce completeness check:
+  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" check-batches "./translations/[VIDEO_ID]/temp" "./translations/[VIDEO_ID]/temp/translation_manifest.json"`
 - Merge translated batches into:
   - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" merge "./translations/[VIDEO_ID]/temp" "./translations/[VIDEO_ID]/temp/zh_translated.srt"`
   - Output:
   - `./translations/[VIDEO_ID]/temp/zh_translated.srt`
 
-### 4.4 Translation verification
+### 4.4 Translation verification (strict)
 
 - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" verify "./translations/[VIDEO_ID]/temp/en_audited.srt" "./translations/[VIDEO_ID]/temp/zh_translated.srt"`
-- Fix CPS/format issues if reported.
+- Optional glossary consistency check:
+  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" verify "./translations/[VIDEO_ID]/temp/en_audited.srt" "./translations/[VIDEO_ID]/temp/zh_translated.srt" "./translations/[VIDEO_ID]/temp/glossary.txt"`
+- Fail conditions include: block count mismatch, index mismatch, timecode mismatch, suspected untranslated blocks, CPS overflow, glossary mismatch.
 
 ### 4.5 Render ASS
 

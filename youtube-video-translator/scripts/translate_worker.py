@@ -2,7 +2,7 @@ import sys
 import os
 import re
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 
 
 TRANSLATION_PROMPT_TEMPLATE = '''你是专业字幕翻译器。请把下面 SRT 批次翻译为中文。
@@ -17,10 +17,15 @@ TRANSLATION_PROMPT_TEMPLATE = '''你是专业字幕翻译器。请把下面 SRT 
 {batch_content}
 '''
 
+TIME_RE = re.compile(r'(\d{2}:\d{2}:\d{2}[,.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,.]\d{3})')
+
+
+def normalize_timecode(ts):
+    return ts.replace('.', ',')
+
 
 def srt_time_to_seconds(srt_time):
-    # Handle both , and . for milliseconds
-    srt_time = srt_time.replace('.', ',')
+    srt_time = normalize_timecode(srt_time)
     h, m, s_ms = srt_time.split(':')
     s, ms = s_ms.split(',')
     return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000.0
@@ -28,19 +33,100 @@ def srt_time_to_seconds(srt_time):
 
 def load_glossary(path):
     glossary = {}
-    if os.path.exists(path):
-        with open(path, 'r', encoding='utf-8') as f:
-            for line in f:
-                if '->' in line:
-                    en, zh = line.split('->')
-                    glossary[en.strip()] = zh.strip()
+    if not path or not os.path.exists(path):
+        return glossary
+
+    with open(path, 'r', encoding='utf-8') as f:
+        for line in f:
+            if '->' in line:
+                en, zh = line.split('->', 1)
+                glossary[en.strip()] = zh.strip()
     return glossary
 
 
+def parse_srt(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        content = f.read().strip()
+
+    if not content:
+        return [], [f'{path}: 文件为空']
+
+    blocks = re.split(r'\n\s*\n', content)
+    parsed = []
+    errors = []
+
+    for pos, block in enumerate(blocks, start=1):
+        lines = [line.rstrip('\r') for line in block.split('\n') if line.strip() != '']
+        if len(lines) < 3:
+            errors.append(f'块 {pos}: 行数不足(至少3行)')
+            continue
+
+        try:
+            idx = int(lines[0].strip())
+        except ValueError:
+            errors.append(f'块 {pos}: 序号非法: {lines[0]!r}')
+            continue
+
+        tm = TIME_RE.search(lines[1])
+        if not tm:
+            errors.append(f'块 {pos}: 时间轴格式非法: {lines[1]!r}')
+            continue
+
+        text = '\n'.join(lines[2:]).strip()
+        parsed.append(
+            {
+                'pos': pos,
+                'index': idx,
+                'start': normalize_timecode(tm.group(1)),
+                'end': normalize_timecode(tm.group(2)),
+                'text': text,
+            }
+        )
+
+    return parsed, errors
+
+
+def extract_zh_text(text):
+    parts = [part.strip() for part in text.split('\\N') if part.strip()]
+    if not parts:
+        return ''
+
+    for part in parts:
+        if re.search(r'[\u4e00-\u9fff]', part):
+            return part
+
+    return parts[-1]
+
+
+def is_likely_untranslated(text):
+    zh_text = extract_zh_text(text)
+    has_cjk = bool(re.search(r'[\u4e00-\u9fff]', zh_text))
+    has_letters = bool(re.search(r'[A-Za-z]', zh_text))
+    return (not has_cjk) and has_letters
+
+
+def check_cps(srt_block, max_cps=15):
+    lines = srt_block.strip().split('\n')
+    if len(lines) < 3:
+        return True, 0.0
+
+    time_match = TIME_RE.search(lines[1])
+    if not time_match:
+        return True, 0.0
+
+    start = srt_time_to_seconds(time_match.group(1))
+    end = srt_time_to_seconds(time_match.group(2))
+    duration = max(0.5, end - start)
+
+    text = ' '.join(lines[2:])
+    zh_text = extract_zh_text(text)
+    zh_len = len(re.sub(r'[^\u4e00-\u9fff]', '', zh_text))
+
+    cps = zh_len / duration
+    return cps <= max_cps, cps
+
+
 def prepare_batches(srt_path, batch_size=50):
-    """
-    将 SRT 文件拆分为多个批次供 Agent 翻译。
-    """
     with open(srt_path, 'r', encoding='utf-8') as f:
         content = f.read().strip()
 
@@ -48,7 +134,7 @@ def prepare_batches(srt_path, batch_size=50):
     batches = []
     for i in range(0, len(blocks), batch_size):
         batch = blocks[i:i + batch_size]
-        batches.append("\n\n".join(batch))
+        batches.append('\n\n'.join(batch))
     return batches
 
 
@@ -56,6 +142,7 @@ def write_batches(srt_path, output_dir='.', batch_size=50):
     os.makedirs(output_dir, exist_ok=True)
     batches = prepare_batches(srt_path, batch_size=batch_size)
     batch_files = []
+
     for i, batch in enumerate(batches, start=1):
         path = os.path.join(output_dir, f'batch_{i}.txt')
         with open(path, 'w', encoding='utf-8') as f:
@@ -88,23 +175,52 @@ def generate_prompt_for_batch(batch_file, output_prompt_path=None):
     return prompt
 
 
-def merge_translated_batches(translated_dir, output_srt_path):
+def detect_batch_completeness(translated_dir, manifest_path=None):
+    if manifest_path is None:
+        candidate = os.path.join(translated_dir, 'translation_manifest.json')
+        manifest_path = candidate if os.path.exists(candidate) else None
+
     files = []
     for name in os.listdir(translated_dir):
         m = re.fullmatch(r'batch_(\d+)\.translated\.srt', name)
         if m:
-            files.append((int(m.group(1)), os.path.join(translated_dir, name)))
+            files.append(int(m.group(1)))
 
-    if not files:
+    found = sorted(files)
+    if not found:
+        return {'ok': False, 'expected': [], 'found': [], 'missing': ['all']}
+
+    expected = list(range(1, max(found) + 1))
+    if manifest_path and os.path.exists(manifest_path):
+        with open(manifest_path, 'r', encoding='utf-8') as f:
+            manifest = json.load(f)
+        total = int(manifest.get('total_batches', max(found)))
+        expected = list(range(1, total + 1))
+
+    missing = [i for i in expected if i not in found]
+    extra = [i for i in found if i not in expected]
+
+    return {
+        'ok': not missing and not extra,
+        'expected': expected,
+        'found': found,
+        'missing': missing,
+        'extra': extra,
+    }
+
+
+def merge_translated_batches(translated_dir, output_srt_path, manifest_path=None):
+    completeness = detect_batch_completeness(translated_dir, manifest_path)
+    if not completeness['found']:
         raise RuntimeError('未找到 batch_*.translated.srt 文件，无法合并。')
+    if completeness['missing'] or completeness['extra']:
+        raise RuntimeError(
+            f"批次不完整: missing={completeness['missing']}, extra={completeness['extra']}"
+        )
 
-    files.sort(key=lambda x: x[0])
     merged_blocks = []
-    expected = 1
-    for idx, path in files:
-        if idx != expected:
-            raise RuntimeError(f'批次不连续：期望 batch_{expected}.translated.srt，实际是 batch_{idx}.translated.srt')
-        expected += 1
+    for idx in completeness['expected']:
+        path = os.path.join(translated_dir, f'batch_{idx}.translated.srt')
         with open(path, 'r', encoding='utf-8') as f:
             content = f.read().strip()
             if content:
@@ -113,73 +229,86 @@ def merge_translated_batches(translated_dir, output_srt_path):
     with open(output_srt_path, 'w', encoding='utf-8') as out:
         out.write('\n\n'.join(merged_blocks) + '\n')
 
-    return len(files)
+    return len(completeness['expected'])
 
 
-def check_cps(srt_block, max_cps=15):
-    """
-    校验单段 SRT 的 CPS。
-    """
-    lines = srt_block.strip().split('\n')
-    if len(lines) < 3:
-        return True, 0
-
-    time_match = re.search(r'(\d+:\d+:\d+[,.]\d+) --> (\d+:\d+:\d+[,.]\d+)', lines[1])
-    if not time_match:
-        return True, 0
-
-    start = srt_time_to_seconds(time_match.group(1))
-    end = srt_time_to_seconds(time_match.group(2))
-    duration = max(0.5, end - start)
-
-    # 提取文本内容
-    text = ' '.join(lines[2:])
-    # 如果有 \N，取后面部分（中文）
-    zh_text = text.split('\\N')[-1] if '\\N' in text else text
-    # 过滤掉非中文字符进行计数
-    zh_len = len(re.sub(r'[^\u4e00-\u9fa5]', '', zh_text))
-
-    cps = zh_len / duration
-    return cps <= max_cps, cps
-
-
-def verify_translated_srt(original_path, translated_path):
-    """
-    验证翻译后的 SRT 是否与原版行数对应，并检查 CPS。
-    """
-    with open(original_path, 'r', encoding='utf-8') as f:
-        orig_blocks = re.split(r'\n\s*\n', f.read().strip())
-
-    with open(translated_path, 'r', encoding='utf-8') as f:
-        trans_blocks = re.split(r'\n\s*\n', f.read().strip())
-
-    if len(orig_blocks) != len(trans_blocks):
-        print(f'警告：块数量不匹配！原版: {len(orig_blocks)}, 翻译版: {len(trans_blocks)}')
+def verify_translated_srt(original_path, translated_path, glossary_path=None, max_cps=15):
+    orig_blocks, orig_errors = parse_srt(original_path)
+    trans_blocks, trans_errors = parse_srt(translated_path)
+    glossary = load_glossary(glossary_path)
 
     issues = []
-    for i, block in enumerate(trans_blocks):
-        is_ok, cps = check_cps(block)
+
+    for err in orig_errors:
+        issues.append(f'[原文格式错误] {err}')
+    for err in trans_errors:
+        issues.append(f'[译文格式错误] {err}')
+
+    if len(orig_blocks) != len(trans_blocks):
+        issues.append(
+            f'[数量不匹配] 原文块数={len(orig_blocks)}, 译文块数={len(trans_blocks)}'
+        )
+
+    pair_count = min(len(orig_blocks), len(trans_blocks))
+    for i in range(pair_count):
+        ob = orig_blocks[i]
+        tb = trans_blocks[i]
+
+        if ob['index'] != tb['index']:
+            issues.append(
+                f"[序号不一致] 第{i+1}对: 原={ob['index']} 译={tb['index']}"
+            )
+
+        if ob['start'] != tb['start'] or ob['end'] != tb['end']:
+            issues.append(
+                f"[时间轴不一致] 块{ob['index']}: 原={ob['start']} --> {ob['end']} 译={tb['start']} --> {tb['end']}"
+            )
+
+        if not tb['text'].strip():
+            issues.append(f"[空翻译] 块{tb['index']} 译文为空")
+
+        if is_likely_untranslated(tb['text']):
+            issues.append(f"[疑似漏翻] 块{tb['index']} 主要为英文/非中文")
+
+        block_text = f"{tb['index']}\n{tb['start']} --> {tb['end']}\n{tb['text']}"
+        is_ok, cps = check_cps(block_text, max_cps=max_cps)
         if not is_ok:
-            issues.append(f'块 {i+1} CPS 过高: {cps:.1f}')
+            issues.append(f"[CPS过高] 块{tb['index']} CPS={cps:.1f} (阈值 {max_cps})")
+
+        if glossary:
+            orig_text_lower = ob['text'].lower()
+            zh_text = extract_zh_text(tb['text'])
+            for en, zh in glossary.items():
+                if en.lower() in orig_text_lower and zh and zh not in zh_text:
+                    issues.append(
+                        f"[术语不一致] 块{tb['index']}: 检测到术语 {en!r}，期望包含 {zh!r}"
+                    )
 
     return issues
 
 
+def print_usage():
+    print('Usage: python translate_worker.py [prepare|prompt|merge|verify|check-batches] [args...]')
+
+
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        print('Usage: python translate_worker.py [prepare|prompt|merge|verify] [args...]')
+        print_usage()
         sys.exit(1)
 
     cmd = sys.argv[1]
+
     if cmd == 'prepare':
         if len(sys.argv) < 3:
-            print('用法: python translate_worker.py prepare [SourceSrtPath] [OutputDir可选]')
+            print('用法: python translate_worker.py prepare [SourceSrtPath] [OutputDir可选] [BatchSize可选]')
             sys.exit(1)
         source_srt = sys.argv[2]
         out_dir = sys.argv[3] if len(sys.argv) >= 4 else '.'
-        batch_files, manifest_path = write_batches(source_srt, out_dir)
+        batch_size = int(sys.argv[4]) if len(sys.argv) >= 5 else 50
+        batch_files, manifest_path = write_batches(source_srt, out_dir, batch_size=batch_size)
         print(f'已生成 {len(batch_files)} 个批次文件。')
         print(f'manifest: {manifest_path}')
+
     elif cmd == 'prompt':
         if len(sys.argv) < 3:
             print('用法: python translate_worker.py prompt [BatchFile] [OutputPromptPath可选]')
@@ -191,26 +320,48 @@ if __name__ == '__main__':
             print(f'已写入翻译提示词: {output_prompt_path}')
         else:
             print(prompt)
+
+    elif cmd == 'check-batches':
+        if len(sys.argv) < 3:
+            print('用法: python translate_worker.py check-batches [TranslatedDir] [ManifestPath可选]')
+            sys.exit(1)
+        translated_dir = sys.argv[2]
+        manifest_path = sys.argv[3] if len(sys.argv) >= 4 else None
+        result = detect_batch_completeness(translated_dir, manifest_path)
+        if result['ok']:
+            print('批次完整性检查通过。')
+        else:
+            print('批次完整性检查失败。')
+            print(f"missing: {result['missing']}")
+            print(f"extra: {result['extra']}")
+            sys.exit(2)
+
     elif cmd == 'merge':
         if len(sys.argv) < 4:
-            print('用法: python translate_worker.py merge [TranslatedDir] [OutputSrtPath]')
+            print('用法: python translate_worker.py merge [TranslatedDir] [OutputSrtPath] [ManifestPath可选]')
             sys.exit(1)
         translated_dir = sys.argv[2]
         output_srt = sys.argv[3]
-        count = merge_translated_batches(translated_dir, output_srt)
+        manifest_path = sys.argv[4] if len(sys.argv) >= 5 else None
+        count = merge_translated_batches(translated_dir, output_srt, manifest_path)
         print(f'已合并 {count} 个批次到: {output_srt}')
+
     elif cmd == 'verify':
         if len(sys.argv) < 4:
-            print('用法: python translate_worker.py verify [OriginalSrtPath] [TranslatedSrtPath]')
+            print('用法: python translate_worker.py verify [OriginalSrtPath] [TranslatedSrtPath] [GlossaryPath可选] [MaxCPS可选]')
             sys.exit(1)
-        issues = verify_translated_srt(sys.argv[2], sys.argv[3])
+        glossary_path = sys.argv[4] if len(sys.argv) >= 5 else None
+        max_cps = int(sys.argv[5]) if len(sys.argv) >= 6 else 15
+        issues = verify_translated_srt(sys.argv[2], sys.argv[3], glossary_path=glossary_path, max_cps=max_cps)
         if issues:
             print('发现以下问题：')
             for issue in issues:
                 print(issue)
+            sys.exit(2)
         else:
-            print('校验通过，未发现 CPS 异常。')
+            print('校验通过：数量/序号/时间轴/CPS/术语一致性正常。')
+
     else:
         print(f'未知命令: {cmd}')
-        print('Usage: python translate_worker.py [prepare|prompt|merge|verify] [args...]')
+        print_usage()
         sys.exit(1)
