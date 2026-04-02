@@ -106,6 +106,7 @@ If transcription mode:
 ### 4.2 Segment audit
 
 - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/subtitle_splitter.py" "./translations/[VIDEO_ID]/temp/en_original.srt" "./translations/[VIDEO_ID]/temp/en_audited.srt"`
+- `subtitle_splitter.py` 兼容 `00:00:10,894` 与 `00:00:10.894` 两种时间分隔格式。
 
 ### 4.3 Batch preparation + translation workflow
 
@@ -122,12 +123,19 @@ If transcription mode:
     - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" prompt "./translations/[VIDEO_ID]/temp/batch_N.txt" "./translations/[VIDEO_ID]/temp/batch_N.prompt.txt"`
   - Save result as:
     - `./translations/[VIDEO_ID]/temp/batch_N.translated.srt`
+- After each batch translation, immediately verify that batch:
+  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" verify "./translations/[VIDEO_ID]/temp/batch_N.txt" "./translations/[VIDEO_ID]/temp/batch_N.translated.srt"`
+- After all batches are done, run full per-batch verification sweep:
+  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" verify-batches "./translations/[VIDEO_ID]/temp"`
+  - (optional flags) `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" verify-batches "./translations/[VIDEO_ID]/temp" --max-cps 15 --glossary "./translations/[VIDEO_ID]/temp/glossary.txt"`
 - Before merge, enforce completeness check:
   - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" check-batches "./translations/[VIDEO_ID]/temp" "./translations/[VIDEO_ID]/temp/translation_manifest.json"`
 - Merge translated batches into:
   - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" merge "./translations/[VIDEO_ID]/temp" "./translations/[VIDEO_ID]/temp/zh_translated.srt"`
   - Output:
   - `./translations/[VIDEO_ID]/temp/zh_translated.srt`
+- After merge, enforce final full-file verification:
+  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" verify "./translations/[VIDEO_ID]/temp/en_audited.srt" "./translations/[VIDEO_ID]/temp/zh_translated.srt"`
 
 ### 4.4 Translation verification (strict)
 
@@ -168,6 +176,10 @@ If transcription mode:
     - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/video_muxer.py" "./translations/[VIDEO_ID]/temp/raw_video.mp4" "" "./translations/[VIDEO_ID]/temp/bilingual.ass" "./translations/[VIDEO_ID]" --original-audio`
   - Chinese dub:
     - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/video_muxer.py" "./translations/[VIDEO_ID]/temp/raw_video.mp4" "./translations/[VIDEO_ID]/temp/zh_voiceover.mp3" "./translations/[VIDEO_ID]/temp/bilingual.ass" "./translations/[VIDEO_ID]"`
+- `video_muxer.py` 的第 4 个参数兼容三种传法：
+  - 项目根目录 `./translations/[VIDEO_ID]`（推荐）
+  - `final` 目录 `./translations/[VIDEO_ID]/final`
+  - 完整文件路径 `./translations/[VIDEO_ID]/final/final_video.mp4`
 - Output: `./translations/[VIDEO_ID]/final/final_video.mp4`
 
 ## Phase 8: Optional Bilibili Publish (Subagent Delegation)

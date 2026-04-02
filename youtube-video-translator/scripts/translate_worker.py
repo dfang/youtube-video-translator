@@ -287,8 +287,95 @@ def verify_translated_srt(original_path, translated_path, glossary_path=None, ma
     return issues
 
 
+def verify_all_batches(translated_dir, glossary_path=None, max_cps=15):
+    """
+    逐批校验：batch_N.txt vs batch_N.translated.srt
+    返回 (has_error, reports)
+    """
+    reports = []
+    has_error = False
+
+    originals = []
+    for name in os.listdir(translated_dir):
+        m = re.fullmatch(r'batch_(\d+)\.txt', name)
+        if m:
+            originals.append((int(m.group(1)), os.path.join(translated_dir, name)))
+
+    if not originals:
+        return True, ['未找到 batch_*.txt，无法执行逐批校验。']
+
+    originals.sort(key=lambda x: x[0])
+
+    for idx, original_path in originals:
+        translated_path = os.path.join(translated_dir, f'batch_{idx}.translated.srt')
+        if not os.path.exists(translated_path):
+            has_error = True
+            reports.append(f'[批次缺失] batch_{idx}.translated.srt 不存在')
+            continue
+
+        issues = verify_translated_srt(
+            original_path,
+            translated_path,
+            glossary_path=glossary_path,
+            max_cps=max_cps,
+        )
+        if issues:
+            has_error = True
+            reports.append(f'--- batch_{idx} 校验失败 ---')
+            reports.extend(issues)
+        else:
+            reports.append(f'[OK] batch_{idx} 校验通过')
+
+    return has_error, reports
+
+
 def print_usage():
-    print('Usage: python translate_worker.py [prepare|prompt|merge|verify|check-batches] [args...]')
+    print('Usage: python translate_worker.py [prepare|prompt|merge|verify|verify-batches|check-batches] [args...]')
+
+
+def _parse_verify_optional_args(args):
+    """
+    解析 verify / verify-batches 的可选参数。
+    兼容：
+      1) 旧位置参数: [GlossaryPath可选] [MaxCPS可选]
+      2) 新 flag 参数: [--glossary PATH] [--max-cps N]
+      3) 仅传 MaxCPS: [15]
+    """
+    glossary_path = None
+    max_cps = 15
+
+    i = 0
+    positional = []
+    while i < len(args):
+        token = args[i]
+        if token == '--glossary':
+            if i + 1 >= len(args):
+                raise ValueError('参数错误: --glossary 需要路径值')
+            glossary_path = args[i + 1]
+            i += 2
+            continue
+        if token == '--max-cps':
+            if i + 1 >= len(args):
+                raise ValueError('参数错误: --max-cps 需要数值')
+            max_cps = int(args[i + 1])
+            i += 2
+            continue
+        positional.append(token)
+        i += 1
+
+    if positional:
+        if len(positional) > 2:
+            raise ValueError('参数错误: 可选参数最多 2 个（GlossaryPath, MaxCPS）')
+        if len(positional) >= 1:
+            first = positional[0]
+            if first.isdigit():
+                max_cps = int(first)
+            else:
+                glossary_path = first
+        if len(positional) == 2:
+            max_cps = int(positional[1])
+
+    return glossary_path, max_cps
 
 
 if __name__ == '__main__':
@@ -349,9 +436,13 @@ if __name__ == '__main__':
     elif cmd == 'verify':
         if len(sys.argv) < 4:
             print('用法: python translate_worker.py verify [OriginalSrtPath] [TranslatedSrtPath] [GlossaryPath可选] [MaxCPS可选]')
+            print('   或: python translate_worker.py verify [Original] [Translated] [--glossary PATH] [--max-cps N]')
             sys.exit(1)
-        glossary_path = sys.argv[4] if len(sys.argv) >= 5 else None
-        max_cps = int(sys.argv[5]) if len(sys.argv) >= 6 else 15
+        try:
+            glossary_path, max_cps = _parse_verify_optional_args(sys.argv[4:])
+        except ValueError as e:
+            print(str(e))
+            sys.exit(1)
         issues = verify_translated_srt(sys.argv[2], sys.argv[3], glossary_path=glossary_path, max_cps=max_cps)
         if issues:
             print('发现以下问题：')
@@ -360,6 +451,24 @@ if __name__ == '__main__':
             sys.exit(2)
         else:
             print('校验通过：数量/序号/时间轴/CPS/术语一致性正常。')
+
+    elif cmd == 'verify-batches':
+        if len(sys.argv) < 3:
+            print('用法: python translate_worker.py verify-batches [BatchDir] [GlossaryPath可选] [MaxCPS可选]')
+            print('   或: python translate_worker.py verify-batches [BatchDir] [--glossary PATH] [--max-cps N]')
+            sys.exit(1)
+        batch_dir = sys.argv[2]
+        try:
+            glossary_path, max_cps = _parse_verify_optional_args(sys.argv[3:])
+        except ValueError as e:
+            print(str(e))
+            sys.exit(1)
+        has_error, reports = verify_all_batches(batch_dir, glossary_path=glossary_path, max_cps=max_cps)
+        for line in reports:
+            print(line)
+        if has_error:
+            sys.exit(2)
+        print('逐批校验全部通过。')
 
     else:
         print(f'未知命令: {cmd}')

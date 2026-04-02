@@ -5,6 +5,7 @@ import edge_tts
 import re
 import subprocess
 import shutil
+import tempfile
 
 def srt_time_to_seconds(srt_time):
     srt_time = srt_time.replace('.', ',')
@@ -62,48 +63,53 @@ async def process_segment(index, text, start_time, end_time, temp_dir, voice="zh
     return aligned_path
 
 async def generate_voiceover(srt_path, output_audio_path):
-    temp_dir = "temp_voice_segments"
-    if os.path.exists(temp_dir): shutil.rmtree(temp_dir)
-    os.makedirs(temp_dir)
-    
-    with open(srt_path, "r", encoding="utf-8") as f:
-        content = f.read().strip()
-    
-    blocks = re.split(r'\n\s*\n', content)
-    aligned_files = []
-    
-    print(f"开始处理 {len(blocks)} 个字幕片段...")
-    
-    for i, block in enumerate(blocks):
-        lines = block.split('\n')
-        if len(lines) < 3: continue
-        
-        time_match = re.search(r'(\d+:\d+:\d+[,.]\d+) --> (\d+:\d+:\d+[,.]\d+)', lines[1])
-        if not time_match: continue
-        
-        start_time = srt_time_to_seconds(time_match.group(1))
-        end_time = srt_time_to_seconds(time_match.group(2))
-        
-        # Extract text (handling bilingual \N)
-        text = " ".join(lines[2:])
-        zh_text = extract_voice_text(text)
+    output_dir = os.path.dirname(os.path.abspath(output_audio_path)) or "."
+    os.makedirs(output_dir, exist_ok=True)
+    temp_dir = tempfile.mkdtemp(prefix="voice_segments_", dir=output_dir)
 
-        aligned_path = await process_segment(i, zh_text, start_time, end_time, temp_dir)
-        aligned_files.append(aligned_path)
-        
-    # 4. Concatenate all segments
-    concat_list_path = os.path.join(temp_dir, "concat.txt")
-    with open(concat_list_path, "w", encoding="utf-8") as f:
-        for fpath in aligned_files:
-            # Use absolute path for safety with ffmpeg concat
-            f.write(f"file '{os.path.abspath(fpath)}'\n")
-            
-    print(f"正在合并音频到: {output_audio_path}...")
-    subprocess.run(['ffmpeg', '-f', 'concat', '-safe', '0', '-i', concat_list_path, '-c', 'libmp3lame', '-q:a', '2', '-y', output_audio_path], check=True, capture_output=True)
-    
-    # 5. Cleanup
-    shutil.rmtree(temp_dir)
-    print("语音合成与对齐完成。")
+    try:
+        with open(srt_path, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+
+        blocks = re.split(r'\n\s*\n', content)
+        aligned_files = []
+
+        print(f"开始处理 {len(blocks)} 个字幕片段...")
+
+        for i, block in enumerate(blocks):
+            lines = block.split('\n')
+            if len(lines) < 3:
+                continue
+
+            time_match = re.search(r'(\d+:\d+:\d+[,.]\d+) --> (\d+:\d+:\d+[,.]\d+)', lines[1])
+            if not time_match:
+                continue
+
+            start_time = srt_time_to_seconds(time_match.group(1))
+            end_time = srt_time_to_seconds(time_match.group(2))
+
+            # Extract text (handling bilingual \N)
+            text = " ".join(lines[2:])
+            zh_text = extract_voice_text(text)
+
+            aligned_path = await process_segment(i, zh_text, start_time, end_time, temp_dir)
+            aligned_files.append(aligned_path)
+
+        if not aligned_files:
+            raise RuntimeError("No valid subtitle segments found for TTS generation.")
+
+        # 4. Concatenate all segments
+        concat_list_path = os.path.join(temp_dir, "concat.txt")
+        with open(concat_list_path, "w", encoding="utf-8") as f:
+            for fpath in aligned_files:
+                # Use absolute path for safety with ffmpeg concat
+                f.write(f"file '{os.path.abspath(fpath)}'\n")
+
+        print(f"正在合并音频到: {output_audio_path}...")
+        subprocess.run(['ffmpeg', '-f', 'concat', '-safe', '0', '-i', concat_list_path, '-c', 'libmp3lame', '-q:a', '2', '-y', output_audio_path], check=True, capture_output=True)
+        print("语音合成与对齐完成。")
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:

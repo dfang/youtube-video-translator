@@ -22,6 +22,17 @@
   4. `merge`
   5. strict `verify`
 - Updated `verify` behavior in `youtube-video-translator/scripts/translate_worker.py` to return non-zero exit code on integrity failures.
+- Updated `youtube-video-translator/scripts/video_muxer.py` output argument handling to accept project dir, `final` dir, or explicit `.mp4` file path, preventing nested `final_video.mp4/final_video.mp4` output paths.
+- Updated `youtube-video-translator/scripts/translate_worker.py` optional arg parsing for `verify` and `verify-batches`:
+  - supports legacy positional args
+  - supports `--glossary` and `--max-cps` flags
+  - supports `max_cps`-only input
+- Updated `youtube-video-translator/scripts/voiceover_tts.py` temp workspace strategy to use unique `tempfile.mkdtemp(...)` directories with guaranteed cleanup in `finally`.
+- Updated `youtube-video-translator/scripts/env_check.py` dependency checks to map import names to install package names (`PIL` -> `Pillow`, `yt_dlp` -> `yt-dlp`).
+- Updated `youtube-video-translator/SKILL.md`:
+  - documented `subtitle_splitter.py` support for both `,` and `.` SRT millisecond delimiters
+  - documented `video_muxer.py` output target compatibility modes
+  - added `verify-batches` optional flag usage example
 
 ### Quality / Style Contract
 - Subtitle visual spec is explicitly documented in `youtube-video-translator/SKILL.md` and aligned with implementation:

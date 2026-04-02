@@ -3,15 +3,17 @@ from utils import get_ffmpeg_path, check_libass_support
 
 def check_python_packages():
     missing = []
-    packages = ["pysubs2", "PIL", "whisperx", "yt_dlp"]
-    for p in packages:
+    packages = [
+        ("pysubs2", "pysubs2"),
+        ("PIL", "Pillow"),
+        ("whisperx", "whisperx"),
+        ("yt_dlp", "yt-dlp"),
+    ]
+    for import_name, package_name in packages:
         try:
-            if p == "PIL":
-                import PIL
-            else:
-                __import__(p)
+            __import__(import_name)
         except ImportError:
-            missing.append(p)
+            missing.append(package_name)
     return missing
 
 def run_checks():
