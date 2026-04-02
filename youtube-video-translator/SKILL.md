@@ -14,6 +14,19 @@ Translate a YouTube video into Chinese with resumable, file-based phases.
 - Before each phase, announce in Chinese (e.g., `正在进入字幕处理阶段...`).
 - If required output already exists, skip phase and continue.
 
+## Phase Progress Reporting (OpenClaw Required)
+
+- MUST proactively report phase progress in chat; do not wait for user to ask.
+- For every phase transition, emit one structured status line using this template:
+  - `[Phase X/10][RUNNING] <phase_name>`
+  - `[Phase X/10][DONE] <phase_name> | output: <key_artifact>`
+  - `[Phase X/10][SKIP] <phase_name> | reason: <why_skipped>`
+  - `[Phase X/10][FAILED] <phase_name> | cmd: <failed_cmd> | retry: <retry_cmd>`
+- When Phase 4 runs by batches, also emit rolling progress:
+  - `[Phase 4/10][RUNNING] batch i/N`
+  - `[Phase 4/10][DONE] batch i/N`
+- Keep status lines concise, Chinese-friendly, and machine-parseable.
+
 ## Orchestration Model (Hybrid)
 
 - Use **main agent** as orchestrator for end-to-end state management.
@@ -232,8 +245,7 @@ Run only when user explicitly asks to publish/save draft (e.g., `publish to Bili
 
 ## Failure Handling
 
-- On any phase failure, report:
-  - failed command
-  - root error summary
-  - concrete retry command
+- On any phase failure, always emit:
+  - `[Phase X/10][FAILED] <phase_name> | cmd: <failed_cmd> | retry: <retry_cmd>`
+  - one-line root cause summary in Chinese
 - Resume from last completed phase; do not redo completed outputs.
