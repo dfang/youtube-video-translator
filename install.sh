@@ -23,7 +23,7 @@ done
 echo "Installing/Updating Python dependencies..."
 # Pillow, edge-tts, whisperx are core dependencies
 # yt-dlp is also available as a python package
-pip3 install --upgrade edge-tts Pillow whisperx yt-dlp --quiet
+pip3 install --upgrade -r "$SRC_DIR/$SKILL_DIR/requirements.txt" --quiet
 
 # 3. Create parent directories
 mkdir -p "$HOME/.agents/skills"

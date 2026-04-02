@@ -1,168 +1,183 @@
 ---
-name: YouTube-Video-Translator
-description: Automatically translate YouTube videos. It supports downloading videos, transcribing with WhisperX (if no subtitles), calling an LLM for translation, generating TTS voiceovers, and finally compositing with FFmpeg. Triggered when the user says "translate video" or "translate this video [URL]".
+name: youtube-video-translator
+description: End-to-end YouTube video localization to Chinese with resumable phases (download, subtitle acquisition/transcription, translation, TTS, cover, mux, optional Bilibili publish). Use this skill whenever the user asks to translate/repost/localize a YouTube video, including Chinese requests like “翻译视频/搬运视频”, or provides a YouTube URL.
 ---
 
-# YouTube-Video-Translator
+# youtube-video-translator
 
-This Skill implements a fully automated workflow for YouTube video translation, transcription, voiceover, and composition, publish to bilibili.
+Translate a YouTube video into Chinese with resumable, file-based phases.
 
-## Trigger Scenarios
+## Operating Style (Progressive Disclosure)
 
-- User instructions containing "translate video" or "translate this video".
-- User provides a YouTube link (e.g., `https://www.youtube.com/watch?v=...`).
-- Optional modifiers: "clean", "original audio", "bilingual subtitles".
-- 翻译视频 或者 翻译这个视频 或者 搬运视频 或者 搬运这个视频
+- Keep context minimal. Load and execute only the current phase.
+- Prefer scripts over manual steps; avoid re-describing logic already in `scripts/`.
+- Before each phase, announce in Chinese (e.g., `正在进入字幕处理阶段...`).
+- If required output already exists, skip phase and continue.
 
-## Workflow (State-driven / Breakpoint Resumption)
+## Canonical Paths
 
-This Skill uses a "project-based" management approach. All files are stored under `./translations/[Video_ID]/`.
+- Skill root: `$HOME/.openclaw/skills/youtube-video-translator`
+- Root: `./translations/[VIDEO_ID]/`
+- Temp: `./translations/[VIDEO_ID]/temp/`
+- Final: `./translations/[VIDEO_ID]/final/`
 
-**Mandatory Procedure**: Before starting each phase, you must inform the user in Chinese about the phase currently being entered (e.g., "正在进入下载阶段...").
+## Phase Graph (Resumable)
 
-Before executing each step, check if the relevant files already exist.
+0. Environment validation
+1. Intent collection (and user confirmation)
+2. Setup
+3. Video download
+4. Subtitle processing + translation
+5. Voiceover
+6. Cover
+7. Video composition
+8. Optional Bilibili publish
+9. Optional cleanup
 
-0. Validate environment
-1. Gather user intents
-2. Setup basic file structure
-3. Donwload video from youtube
-4. Process subtitles
-5. Generate voiceover
-6. Process cover
-7. Compose video
-8. Publish to Bilibili
-9. Clean up
+---
 
-### 0. Environment Validation Phase (Critical)
+## Phase 0: Environment Validation
 
-- **Goal**: Ensure the system has the required tools and libraries to prevent runtime failures.
-- **Action**: Run `python3 scripts/env_check.py`.
-- **Validation Points**:
-  - `ffmpeg` MUST have `libass` support (run `ffmpeg -version` to verify).
-  - All Python dependencies in `requirements.txt` MUST be installed.
-  - If validation fails, provide the user with specific fix commands (e.g., `brew install ffmpeg-full` or `pip install -r requirements.txt`).
+- Goal: fail fast on missing runtime dependencies.
+- Command: `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/env_check.py"`
+- Pass condition:
+  - `ffmpeg` exists and has `libass`
+  - Python deps are installed from `requirements.txt`
+- If failed, stop and return fix commands.
 
-### 1. Gathering intents Phase
+## Phase 1: Gather Intents (Chinese)
 
-Ask user in Chinese, and print user intents in Chinese:
+Ask and summarize in Chinese:
 
-- keep original audio (default) or dub to chinese
-- download subtitle or transcribe subtitle
-- bilingual subtitles or chinese subtitle only (default)
-- publish to Bilibili (default)
-- clean up or not (default)
-- **Localized Title Confirmation**: Propose 2-3 short, catchy Chinese titles for the video and cover based on the original metadata. Ask the user to select one or provide a custom one.
+- Keep original audio or use Chinese dub
+- Subtitle source: download vs transcribe
+- Output subtitle style: Chinese-only vs bilingual
+- Whether to publish to Bilibili
+- Whether to clean temp files
+- Ask user to choose/provide Chinese title for cover/publish
 
-**Confirmation Step**: After gathering and summarizing all intents (including the chosen Chinese title), you **MUST** ask the user if they are ready to proceed (e.g., "确认开始翻译吗？") and wait for their confirmation before moving to the Setup Phase.
+Then ask: `确认开始翻译吗？` and wait for explicit confirmation.
 
-### 2. Setup Phase
+## Phase 2: Setup
 
-- Print user intents in Chinese
-- Parse the YouTube URL to obtain the `Video_ID`.
-- Create the directory structure: `./translations/[Video_ID]/temp/`.
-- **Traceability**: Save the original YouTube URL into `./translations/[Video_ID]/temp/url.txt`.
-- If raw_video.mp4 exists, skip this phase, inform user that the video is already downloaded, go to subtitle processing phase.
+- Parse `VIDEO_ID` from URL.
+- Create dirs:
+  - `./translations/[VIDEO_ID]/temp/`
+  - `./translations/[VIDEO_ID]/final/`
+- Save source URL: `./translations/[VIDEO_ID]/temp/url.txt`
 
-### 3. Video Downloading Phase
+## Phase 3: Download Video
 
-- **Goal**: Download the original video.
-- **Status Check**: Check if `./translations/[Video_ID]/temp/raw_video.mp4` exists.
-- **Execution**: Call `scripts/downloader.py [URL] [OutputDir]`.
+- Output target: `./translations/[VIDEO_ID]/temp/raw_video.mp4`
+- Command:
+  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/downloader.py" "[URL]" "./translations/[VIDEO_ID]/temp"`
 
-### 4. Subtitle Processing Phase
+## Phase 4: Subtitle Processing + Translation
 
-- **Goal**: Obtain source subtitles and translate them into Chinese with high precision and visual comfort.
-- **Status Check**: Check if `./translations/[Video_ID]/temp/bilingual.ass` exists.
-- **Execution Logic**:
-  1. **Source Selection**:
-     - If user intent is **Download**: Attempt `yt-dlp --write-subs`. Fall back to transcription if failed.
-     - If user intent is **Transcribe**: Run `scripts/whisperx_transcriber.py`.
-  2. **Segmentation Audit (Mandatory Pre-translation)**:
-     - Run `scripts/subtitle_splitter.py` on the raw SRT.
-     - **Thresholds**: Any segment with `Duration > 8.0s` must be split into multiple segments of ~5s.
-     - **Goal**: Prevent LLM from producing massive text blocks and ensure visual comfort.
-  3. **Context & Glossary Pre-process (Mandatory)**:
-     - Extract key medical/technical terms from `info.json` title and description.
-     - Create a **Local Glossary** (e.g., "VILI -> 呼吸机诱导的肺损伤", "PEEP -> 呼气末正压") to prime the LLM.
-  4. **Batch Translation Strategy (For Videos > 10 mins)**:
-     - **Constraint**: To prevent LLM context truncation or file write limits, subtitles MUST be translated in batches of ~50 segments.
-     - **Execution**: Use `scripts/translate_worker.py` to facilitate the translation process.
-     - **CPS Strict Enforcement**: Every translated segment MUST be checked for CPS (Characters Per Second) using the logic in `translate_worker.py`. 
-       - **Formula**: `Chinese Character Count / Duration < 15`.
-       - **Action**: If CPS exceeds 15, the LLM MUST summarize or use professional paraphrasing to shorten the text while preserving the core medical meaning.
-     - **Verification**: After each batch, verify the line count matches the source segment count and no line exceeds the CPS limit.
+### 4.1 Acquire source subtitle
 
+If subtitle download mode:
+- Try `yt-dlp --write-subs` flow through existing downloader pipeline.
+- If unavailable, fallback to transcription with:
+  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/whisperx_transcriber.py" "./translations/[VIDEO_ID]/temp/raw_video.mp4" "./translations/[VIDEO_ID]/temp"`
 
-  5. **Translation Guidelines**:
-     - **Acronym Preservation**: Keep critical acronyms (e.g., PEEP, ARDS) but provide Chinese explanation on first appearance.
-     - **Conciseness (CPS Control)**: If Reading Speed (CPS) > 15 chars/sec, LLM must summarize or condense.
-  6. **Physical Splitting & Formatting (Strict Enforcement)**:
-     - **Hard Split (Time)**: Any segment > 8 seconds MUST be logically split into multiple chronological segments (e.g., a 20s segment should be split into 4-5 sub-segments).
-     - **Hard Split (Length)**: Any single line > 25 Chinese characters MUST be split into two separate chronological segments OR use `\N` for a manual break if the duration is short.
-     - **Readability (CPS Control)**: Maintain a target Reading Speed (CPS) of 10-15 chars/sec. If the translation is too long for the given duration, the LLM MUST summarize or use professional paraphrasing to shorten the text while preserving the core medical meaning.
-     - **Visual Balance**: Always use Chinese on top (Size 16) and English on bottom (Size 14) via `\N{\fs14}`. 
-     - **Typography**: Font: `PingFang SC Semibold`, Primary Color: Black (`&H00000000`), Outline Color: White (`&H00FFFFFF`), Outline Width: 1.5.
-  7. **Consistency Check**: Final `.ass` must be scanned for any remaining untranslated English lines or sequence gaps.
+If transcription mode:
+- `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/whisperx_transcriber.py" "./translations/[VIDEO_ID]/temp/raw_video.mp4" "./translations/[VIDEO_ID]/temp"`
+- Expected output: `./translations/[VIDEO_ID]/temp/en_original.srt`
 
-### 5. Voiceover Engine Phase
+### 4.2 Segment audit
 
-- **Goal**: Generate Chinese voiceover audio.
-- **Status Check**: Check if `./translations/[Video_ID]/temp/zh_voiceover.mp3` exists.
-- **Execution Logic**:
-- **Skip Condition**: If the user intent is "keep original audio", skip this phase entirely.
-- **Audio Alignment (Speed-to-Fit)**: If the generated TTS duration exceeds the original segment duration, the script must automatically speed up the audio (using FFmpeg `atempo` or TTS engine parameters) up to a maximum of 1.25x.
-- **Execution**: Call `scripts/voiceover_tts.py [zh_translated.srt]`.
+- `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/subtitle_splitter.py" "./translations/[VIDEO_ID]/temp/en_original.srt" "./translations/[VIDEO_ID]/temp/en_audited.srt"`
 
-### 6. Cover Process Phase
+### 4.3 Batch preparation + translation workflow
 
-- **Goal**: Generate a high-quality localized cover image using the title confirmed in Phase 1.
-- **Status Check**: Check if `./translations/[Video_ID]/final/cover_final.jpg` exists.
-- **Execution Logic**:
-  1. **Source Extraction**: Attempt to download the highest resolution thumbnail from YouTube. If restricted, extract a keyframe from `raw_video.mp4` at approximately 30 seconds.
-  2. **Localized Design**: Call `scripts/cover_generator.py` using the confirmed Chinese title.
-     - **Output Destination**: Pass the full output path as the second argument: `./translations/[Video_ID]/final/cover_final.jpg`. The script does NOT create the `final/` directory automatically — ensure it exists before calling.
-     - The script must automatically calculate optimal font sizes to prevent text overflow.
-     - Add a semi-transparent dark overlay to ensure text readability.
-     - Position the title and speaker information in the vertical center for optimal visual balance.
-  3. **Verification**: Ensure the final image is 16:9 and saved as `cover_final.jpg`.
+- Generate batches:
+  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" prepare "./translations/[VIDEO_ID]/temp/en_audited.srt" "./translations/[VIDEO_ID]/temp"`
+- Translation model source (A-mode): use the current channel/session primary model directly.
+- Do NOT ask for or require Gemini/OpenAI/Claude API keys in this phase.
+- For each batch file:
+  - Build prompt (optional):
+    - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" prompt "./translations/[VIDEO_ID]/temp/batch_N.txt" "./translations/[VIDEO_ID]/temp/batch_N.prompt.txt"`
+  - Ask the active agent model to translate the batch and save as:
+    - `./translations/[VIDEO_ID]/temp/batch_N.translated.srt`
+- Merge translated batches into:
+  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" merge "./translations/[VIDEO_ID]/temp" "./translations/[VIDEO_ID]/temp/zh_translated.srt"`
+  - Output:
+  - `./translations/[VIDEO_ID]/temp/zh_translated.srt`
 
-### 7. Video Composer Phase
+### 4.4 Translation verification
 
-- **Goal**: Composite video, voiceover, and subtitles.
-- **Status Check**: Check if `./translations/[Video_ID]/final/final_video.mp4` exists.
-- **Execution**: Call `scripts/video_muxer.py`.
-- **Metadata (Optional)**: If a localized cover exists, attach it as the video's thumbnail using FFmpeg's `attached_pic` disposition.
+- `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" verify "./translations/[VIDEO_ID]/temp/en_audited.srt" "./translations/[VIDEO_ID]/temp/zh_translated.srt"`
+- Fix CPS/format issues if reported.
 
-### 8. Bilibili Publisher Phase
+### 4.5 Render ASS
 
-... (rest of the file)
+- `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/srt_to_ass.py" "./translations/[VIDEO_ID]/temp/zh_translated.srt" "./translations/[VIDEO_ID]/temp/bilingual.ass"`
+- Subtitle style contract:
+  - Layout: Chinese on top, English on bottom (`\\N{\\fs14}`)
+  - Font: `PingFang SC Semibold`
+  - Font size: Chinese `16`, English `14`
+  - Colors: primary text black, outline white
+  - Outline width: `1`
 
-- **Trigger Condition**: User mentions "publish to Bilibili", "post", or "save draft".
-- **Goal**: Publish the final product to the Bilibili Creator Center via browser automation.
-- **Execution Logic**:
-  1. **Prepare Metadata**:
-     - Claude combines translated content with `info.json` to generate a title, detailed description, and tags matching Bilibili's style.
-     - Identify the appropriate category (e.g., Technology/Medicine).
-  2. **Launch Browser Proxy**:
-     - Activate the `agent-browser` skill.
-     - Navigate to `member.bilibili.com/platform/upload/video/frame`.
-  3. **UI Interaction Flow**:
-     - Automatically select and upload `./translations/[Video_ID]/final/final_video.mp4`.
-     - Fill in the title, description, tags, and category.
-     - Based on instructions: Click "Post Now" or "Save Draft".
+## Phase 5: Voiceover
 
-### 8. Cleaner Phase
+- Skip if user chose original audio.
+- Command:
+  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/voiceover_tts.py" "./translations/[VIDEO_ID]/temp/zh_translated.srt" "./translations/[VIDEO_ID]/temp/zh_voiceover.mp3"`
+- Output: `./translations/[VIDEO_ID]/temp/zh_voiceover.mp3`
 
-- **Condition**: Execute only if the user explicitly mentions "clean".
-- **Execution**: Call `scripts/cleaner.py` to delete the `temp/` folder.
+## Phase 6: Cover
 
-## Technical Specifications
+- Prepare background image (thumbnail or extracted frame).
+- `SUBTITLE` source: use creator/topic short label derived from Phase 1 confirmed publish metadata (or empty string if user requests title-only cover).
+- Command:
+  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/cover_generator.py" "[BG_PATH]" "./translations/[VIDEO_ID]/final/cover_final.jpg" "[ZH_TITLE]" "[SUBTITLE]"`
+- Output: `./translations/[VIDEO_ID]/final/cover_final.jpg`
 
-- **Operating Environment**: macOS (Mac mini M4).
-- **Translation Guidelines**: Translation must incorporate the video title and description as context; using Google Translate is strictly prohibited.
-- **FFmpeg Commands**: Must ensure audio and video synchronization with no dropped frames.
+## Phase 7: Compose Final Video
 
-## Troubleshooting
+- Command:
+  - Keep original audio:
+    - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/video_muxer.py" "./translations/[VIDEO_ID]/temp/raw_video.mp4" "" "./translations/[VIDEO_ID]/temp/bilingual.ass" "./translations/[VIDEO_ID]" --original-audio`
+  - Chinese dub:
+    - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/video_muxer.py" "./translations/[VIDEO_ID]/temp/raw_video.mp4" "./translations/[VIDEO_ID]/temp/zh_voiceover.mp3" "./translations/[VIDEO_ID]/temp/bilingual.ass" "./translations/[VIDEO_ID]"`
+- Output: `./translations/[VIDEO_ID]/final/final_video.mp4`
 
-- **Breakpoint Resumption**: If an error occurs mid-execution (e.g., API timeout), inform the user of the cause. Once the user fixes the issue and re-issues the command, the Skill will automatically resume from the breakpoint without re-downloading.
-- **Manual Phase Selection**: If the process is interrupted or fails, the user can explicitly instruct the Skill to start from a specific phase (e.g., "Start from Voiceover Phase") to skip previous steps or re-run a specific part of the workflow.
+## Phase 8: Optional Bilibili Publish (Subagent Delegation)
+
+Run only when user explicitly asks to publish/save draft (e.g., `publish to Bilibili`, `post`, `save draft`, `发布到B站`, `保存草稿`).
+
+- Delegate browser UI automation to `agent-browser` skill.
+- Main agent responsibilities before delegation:
+  - Confirm final artifacts exist (`final_video.mp4`, optional `cover_final.jpg`)
+  - Generate title/description/tags in Chinese
+  - Provide publish mode: post now vs save draft
+- Subagent responsibilities:
+  - Open Bilibili creator page
+  - Upload video and fill metadata
+  - Execute user-selected publish action
+
+## Phase 9: Optional Cleanup
+
+- Run only if user explicitly asks to clean.
+- Command:
+  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/cleaner.py" "./translations/[VIDEO_ID]/temp"`
+
+---
+
+## Quality Gates
+
+- Timing/format: translated SRT must keep index and valid timecode.
+- CPS: follow `translate_worker.py verify` output.
+- Subtitle render: `bilingual.ass` must be burnable by ffmpeg with `libass`.
+- Subtitle visual spec must match Phase 4.5 style contract.
+- Final output: `final_video.mp4` must exist before publish phase.
+
+## Failure Handling
+
+- On any phase failure, report:
+  - failed command
+  - root error summary
+  - concrete retry command
+- Resume from last completed phase; do not redo completed outputs.

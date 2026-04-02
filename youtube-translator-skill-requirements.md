@@ -8,7 +8,7 @@
 
 - **检查点逻辑**:
   1. 若无原始视频 -> `downloader`。
-  2. 若无翻译字幕 -> `subtitle_manager` (WhisperX + LLM)。
+  2. 若无翻译字幕 -> `subtitle_manager` (WhisperX + 当前会话模型翻译)。
   3. 若无配音音频 -> `voiceover_engine` (TTS)。
   4. 若无最终成品 -> `video_composer` (FFmpeg)。
   5. **发布逻辑 (NEW)** -> `bilibili_publisher` (Browser Automation)。
@@ -16,7 +16,13 @@
 ## 2. 子模块职责定义 (Sub-module Responsibilities)
 
 - **`downloader`**: 下载原始视频及元数据。
-- **`subtitle_manager`**: 转录 (WhisperX) 并由 LLM 翻译生成 `.ass` 字幕。
+- **`subtitle_manager`**: 转录 (WhisperX) 并由当前 channel 对应 agent 的 primary model 翻译生成 `.ass` 字幕。
+
+### 2.1 模型与密钥策略 (A-mode)
+
+- 字幕翻译优先使用当前会话/频道的 primary model。
+- 不应在该 Skill 流程中强制要求 Gemini API Key。
+- 仅当用户明确选择外部 provider（如 Gemini/OpenAI）时，才提示对应 API Key。
 - **`voiceover_engine`**: 生成中文配音音频。
 - **`video_composer`**: 合成最终视频。
 - **`cleaner`**: 根据需求清理中间文件。

@@ -14,7 +14,7 @@ def convert_srt_to_ass(srt_path, ass_path):
     style.fontsize = 16
     style.primarycolor = pysubs2.Color(0, 0, 0)
     style.outlinecolor = pysubs2.Color(255, 255, 255)
-    style.outline = 1.5
+    style.outline = 1
     style.shadow = 0
     style.alignment = pysubs2.Alignment.BOTTOM_CENTER
     style.marginv = 15
