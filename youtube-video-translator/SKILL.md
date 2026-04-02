@@ -26,11 +26,11 @@ Translate a YouTube video into Chinese with resumable, file-based phases.
 
 ### Delegation Matrix
 
-- Main-agent phases (default): 0, 1, 2, 3, 7, 9
+- Main-agent phases (default): 0, 1, 2, 3, 7, 8, 10
 - Sub-agent preferred phases:
   - Phase 4 batch translation (parallel by `batch_N.txt`)
   - Phase 6 cover generation (optional delegation)
-  - Phase 8 publishing (`agent-browser`)
+  - Phase 9 publishing (`agent-browser`)
 
 ## Canonical Paths
 
@@ -49,8 +49,9 @@ Translate a YouTube video into Chinese with resumable, file-based phases.
 5. Voiceover
 6. Cover
 7. Video composition
-8. Optional Bilibili publish
-9. Optional cleanup
+8. Upload preview (Filebin)
+9. Optional Bilibili publish
+10. Optional cleanup
 
 ---
 
@@ -182,7 +183,20 @@ If transcription mode:
   - 完整文件路径 `./translations/[VIDEO_ID]/final/final_video.mp4`
 - Output: `./translations/[VIDEO_ID]/final/final_video.mp4`
 
-## Phase 8: Optional Bilibili Publish (Subagent Delegation)
+## Phase 8: Upload Preview to Filebin
+
+- Goal: generate a shareable preview URL for quick review.
+- Reference doc: `./references/filebin.md`
+- Command:
+  - `BIN="[VIDEO_ID]"`
+  - `curl -sS -X PUT -H "Content-Type: video/mp4" --data-binary "@./translations/[VIDEO_ID]/final/final_video.mp4" "https://filebin.net/$BIN/final_video.mp4"`
+  - `echo "https://filebin.net/$BIN/final_video.mp4" > "./translations/[VIDEO_ID]/final/preview.txt"`
+- Preview URL:
+  - `https://filebin.net/$BIN/final_video.mp4`
+- Optional verify:
+  - `curl -I "https://filebin.net/$BIN/final_video.mp4"`
+
+## Phase 9: Optional Bilibili Publish (Subagent Delegation)
 
 Run only when user explicitly asks to publish/save draft (e.g., `publish to Bilibili`, `post`, `save draft`, `发布到B站`, `保存草稿`).
 
@@ -196,7 +210,7 @@ Run only when user explicitly asks to publish/save draft (e.g., `publish to Bili
   - Upload video and fill metadata
   - Execute user-selected publish action
 
-## Phase 9: Optional Cleanup
+## Phase 10: Optional Cleanup
 
 - Run only if user explicitly asks to clean.
 - Command:
@@ -211,6 +225,8 @@ Run only when user explicitly asks to publish/save draft (e.g., `publish to Bili
 - Subtitle render: `bilingual.ass` must be burnable by ffmpeg with `libass`.
 - Subtitle visual spec must match Phase 4.5 style contract.
 - Final output: `final_video.mp4` must exist before publish phase.
+- Preview gate: Filebin preview URL should be generated in Phase 8 before publish.
+- Preview record: `./translations/[VIDEO_ID]/final/preview.txt` must exist before publish.
 
 ## Failure Handling
 
