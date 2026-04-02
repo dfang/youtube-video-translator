@@ -73,7 +73,7 @@ Ask and summarize in Chinese:
 - Output subtitle style: Chinese-only vs bilingual
 - Whether to publish to Bilibili
 - Whether to clean temp files
-- Ask user to choose/provide Chinese title for cover/publish
+- Do not ask for title in this phase
 
 Then ask: `确认开始翻译吗？` and wait for explicit confirmation.
 
@@ -165,6 +165,8 @@ If transcription mode:
 ## Phase 6: Cover
 
 - Prepare background image (thumbnail or extracted frame).
+- Generate 3-5 recommended Chinese titles based on video content and translated subtitles.
+- Ask user to pick one recommended title before rendering cover/publish metadata.
 - `SUBTITLE` source: use creator/topic short label derived from Phase 1 confirmed publish metadata (or empty string if user requests title-only cover).
 - Command:
   - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/cover_generator.py" "[BG_PATH]" "./translations/[VIDEO_ID]/final/cover_final.jpg" "[ZH_TITLE]" "[SUBTITLE]"`
