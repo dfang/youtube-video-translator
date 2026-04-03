@@ -6,6 +6,10 @@ import re
 import subprocess
 import shutil
 import tempfile
+from utils import get_ffmpeg_path, get_ffprobe_path
+
+FFMPEG = get_ffmpeg_path()
+FFPROBE = get_ffprobe_path()
 
 def srt_time_to_seconds(srt_time):
     srt_time = srt_time.replace('.', ',')
@@ -14,8 +18,10 @@ def srt_time_to_seconds(srt_time):
     return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000.0
 
 def get_audio_duration(file_path):
+    if not FFPROBE:
+        raise RuntimeError("ffprobe not found")
     cmd = [
-        'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+        FFPROBE, '-v', 'error', '-show_entries', 'format=duration',
         '-of', 'default=noprint_wrappers=1:nokey=1', file_path
     ]
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -41,9 +47,12 @@ async def process_segment(index, text, start_time, end_time, temp_dir, voice="zh
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(raw_path)
     
+    if not FFMPEG:
+        raise RuntimeError("ffmpeg not found")
+
     if not os.path.exists(raw_path) or os.path.getsize(raw_path) == 0:
         # Fallback for empty text segments
-        subprocess.run(['ffmpeg', '-f', 'lavfi', '-i', f'anullsrc=r=44100:cl=mono', '-t', str(target_duration), '-y', aligned_path], check=True, capture_output=True)
+        subprocess.run([FFMPEG, '-f', 'lavfi', '-i', f'anullsrc=r=44100:cl=mono', '-t', str(target_duration), '-y', aligned_path], check=True, capture_output=True)
         return aligned_path
 
     # 2. Get duration
@@ -53,12 +62,12 @@ async def process_segment(index, text, start_time, end_time, temp_dir, voice="zh
     if actual_duration > target_duration:
         speed = min(1.25, actual_duration / target_duration)
         print(f"Segment {index}: Speeding up by {speed:.2f}x")
-        subprocess.run(['ffmpeg', '-i', raw_path, '-filter:a', f"atempo={speed}", '-y', aligned_path], check=True, capture_output=True)
+        subprocess.run([FFMPEG, '-i', raw_path, '-filter:a', f"atempo={speed}", '-y', aligned_path], check=True, capture_output=True)
     else:
         # Pad with silence
         pad_dur = target_duration - actual_duration
         print(f"Segment {index}: Padding with {pad_dur:.2f}s silence")
-        subprocess.run(['ffmpeg', '-i', raw_path, '-af', f"apad=pad_dur={pad_dur}", '-y', aligned_path], check=True, capture_output=True)
+        subprocess.run([FFMPEG, '-i', raw_path, '-af', f"apad=pad_dur={pad_dur}", '-y', aligned_path], check=True, capture_output=True)
     
     return aligned_path
 
@@ -106,7 +115,9 @@ async def generate_voiceover(srt_path, output_audio_path):
                 f.write(f"file '{os.path.abspath(fpath)}'\n")
 
         print(f"正在合并音频到: {output_audio_path}...")
-        subprocess.run(['ffmpeg', '-f', 'concat', '-safe', '0', '-i', concat_list_path, '-c', 'libmp3lame', '-q:a', '2', '-y', output_audio_path], check=True, capture_output=True)
+        if not FFMPEG:
+            raise RuntimeError("ffmpeg not found")
+        subprocess.run([FFMPEG, '-f', 'concat', '-safe', '0', '-i', concat_list_path, '-c', 'libmp3lame', '-q:a', '2', '-y', output_audio_path], check=True, capture_output=True)
         print("语音合成与对齐完成。")
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)

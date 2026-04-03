@@ -7,6 +7,15 @@ description: End-to-end YouTube video localization to Chinese with resumable pha
 
 Translate a YouTube video into Chinese with resumable, file-based phases.
 
+## System Requirements
+
+- **FFmpeg with libass**: Required for hardcoding subtitles.
+- **macOS Recommendation**: Install `ffmpeg-full` via Homebrew to ensure all capabilities are present:
+  ```bash
+  brew install ffmpeg-full
+  ```
+- **Fallback**: The skill will attempt to find `ffmpeg-full` or `ffmpeg` with `libass` support automatically. If environment check fails, follow the suggested fix commands.
+
 ## Core Principle: State Lives on Disk
 
 All phase state is persisted to `translations/[VIDEO_ID]/.phase-state.json`.
@@ -52,6 +61,7 @@ Every phase transition emits one structured line:
 ```
 
 Long phases emit heartbeats every 60-120s:
+
 ```
 [Phase X/10][HEARTBEAT] <phase_name> | elapsed: <seconds>s
 ```
@@ -72,6 +82,7 @@ Persist `temp/intent.json` using this schema before continuing past Phase 1:
 ```
 
 Rules:
+
 - `audio_mode` controls whether Phase 5 generates `zh_voiceover.mp3`.
 - `subtitle_mode` controls whether Phase 4 prefers official subtitles, requires official subtitles, or forces WhisperX transcription.
 - `subtitle_layout` controls whether Phase 4/7 render bilingual subtitles or Chinese-only subtitles.
@@ -80,11 +91,13 @@ Rules:
 ## Phase Definitions (file-based)
 
 ### Phase 0: Environment Validation
+
 - **Runner**: `phase_runner.py --phase 0`
 - **Script**: `scripts/env_check.py`
 - **Output**: Pass/fail + fix commands
 
 ### Phase 1: Gather Intents
+
 - **Runner**: `phase_runner.py --phase 1 --video-id [ID]`
 - **Mode**: Interactive (main agent asks in Chinese)
 - **Collected**: Audio choice, subtitle mode, subtitle layout, publish intent, cleanup intent
@@ -92,6 +105,7 @@ Rules:
 - **Wait**: Explicit user confirmation before proceeding (`confirmed: true`)
 
 ### Phase 2: Setup
+
 - **Runner**: `phase_runner.py --phase 2 --video-id [ID]`
 - **Script**: `phase_runner.py` handles internally
 - **Creates**: `temp/`, `final/` directories, canonical input path `temp/url.txt`
@@ -100,11 +114,13 @@ Rules:
 - **Input**: `temp/url.txt` (must contain YouTube URL)
 
 ### Phase 3: Video Download
+
 - **Runner**: `phase_runner.py --phase 3 --video-id [ID]`
 - **Script**: `scripts/downloader.py`
 - **Output**: `temp/raw_video.mp4`
 
 ### Phase 4: Subtitle Processing + Translation
+
 - **Runner**: `phase_runner.py --phase 4 --video-id [ID]`
 - **Scripts**:
   - `scripts/whisperx_transcriber.py` (if transcribing)
@@ -129,12 +145,14 @@ Rules:
 - **Verification**: `translate_worker.py verify` after each batch and at end
 
 ### Phase 5: Voiceover
+
 - **Runner**: `phase_runner.py --phase 5 --video-id [ID]`
 - **Script**: `scripts/voiceover_tts.py`
 - **Output**: `temp/zh_voiceover.mp3`
 - **Skip**: If user chose original audio in Phase 1
 
 ### Phase 6: Cover
+
 - **Runner**: `phase_runner.py --phase 6 --video-id [ID]`
 - **Script**: `scripts/cover_generator.py`
 - **Input artifacts**:
@@ -148,17 +166,20 @@ Rules:
   - Re-running Phase 6 consumes the selection and renders the cover
 
 ### Phase 7: Compose Final Video
+
 - **Runner**: `phase_runner.py --phase 7 --video-id [ID]`
 - **Script**: `scripts/video_muxer.py`
 - **Output**: `final/final_video.mp4`
 - **Modes**: `--original-audio` or with voiceover
 
 ### Phase 8: Upload Preview
+
 - **Runner**: `phase_runner.py --phase 8 --video-id [ID]`
 - **Reference**: `references/filebin.md`
 - **Output**: `final/preview.txt` with exactly one Filebin URL line
 
 ### Phase 9: Bilibili Publish
+
 - **Runner**: `phase_runner.py --phase 9 --video-id [ID]`
 - **Delegation**: `agent-browser` skill for UI automation
 - **Pre-check**: Confirm artifacts exist, generate metadata, confirm mode with user
@@ -167,6 +188,7 @@ Rules:
 - **Reference**: `agents/publisher.md`
 
 ### Phase 10: Cleanup
+
 - **Runner**: `phase_runner.py --phase 10 --video-id [ID]`
 - **Script**: `scripts/cleaner.py`
 - **Skip**: Unless user explicitly requested cleanup in Phase 1
@@ -195,6 +217,7 @@ When delegating a phase to a subagent:
 4. On failure, retry or report back to user
 
 Example subagent launch:
+
 ```
 Agent: general-purpose
 Task: Translate batch N for video abc123

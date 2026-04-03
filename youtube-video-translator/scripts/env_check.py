@@ -70,9 +70,12 @@ def run_checks():
 
     print(f"[*] FFmpeg Path: {ffmpeg_path or 'Not Found'}")
     if libass_ok:
-        print("[*] FFmpeg Capability: Found 'libass' support.")
+        print("[*] FFmpeg Capability: Found 'libass' support. (支持硬字幕烧录)")
     else:
         print("[!] FFmpeg Capability: 'libass' NOT found. Hardcoding subtitles will fail.")
+        print("[!] 提示: 当前 FFmpeg 编译时未包含 libass，无法烧录硬字幕。")
+        print("    Fix: brew install homebrew-ffmpeg/ffmpeg/ffmpeg --with-libass")
+        print("    Or: brew install ffmpeg-full")
 
     if missing_packages:
         print(f"[!] Missing Python packages: {', '.join(missing_packages)}")
