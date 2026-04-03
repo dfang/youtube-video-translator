@@ -475,6 +475,14 @@ def main():
             print("Error: --video-id required")
             sys.exit(1)
 
+        # 确保状态文件在任务开始时就存在
+        load_state(video_id)
+        # 如果是初次运行，save_state 会由 load_state 间接触发（如果逻辑需要），
+        # 但显式保存一次初始状态更稳妥。
+        from state_manager import save_state
+        initial_state = load_state(video_id)
+        save_state(video_id, initial_state)
+
         intent = load_intent(video_id)
         outcome = run_single_phase(video_id, specific_phase, intent) if specific_phase is not None else run_from_state(video_id, intent)
         sys.exit(0 if outcome in {"done", "waiting"} else 1)

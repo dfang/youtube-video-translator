@@ -20,7 +20,7 @@ def delta_to_srt_time(delta):
 
 def split_text_naturally(text, num_parts):
     parts = []
-    
+
     # Simple strategy: find split points that result in relatively even segments
     # For now, let's use a more robust split that tries to keep sentences together
     sentences = re.split(r'(\.|\?|!|;)\s*', text)
@@ -40,7 +40,7 @@ def split_text_naturally(text, num_parts):
             else:
                 parts.append(" ".join(combined_sentences[i*avg:(i+1)*avg]))
         return parts
-    
+
     # Fallback to word-based splitting if not enough sentences
     words = text.split()
     avg_len = len(words) // num_parts
@@ -77,7 +77,7 @@ def audit_and_split_srt(input_path, output_path, max_duration=8.0):
         if duration > max_duration:
             # Calculate how many segments we need based on a target 4-5s per segment
             num_segments = max(2, int(duration // 4.5))
-            
+
             sub_duration = duration / num_segments
             sub_texts = split_text_naturally(text, num_segments)
 

@@ -1,0 +1,39 @@
+# 在此处添加自定义医疗术语，支持每行一个术语或使用标点或空格分隔。
+# 越靠前的术语在 WhisperX 转录时权重越高。
+# 示例：
+# extracorporeal membrane oxygenation, ECMO, myocarditis, pericarditis
+
+# ----------------- ICU 核心默认术语 -----------------
+
+# 生命体征
+vital signs, blood pressure, heart rate, oxygen saturation, respiratory rate, temperature, mean arterial pressure
+
+# 呼吸系统
+respiratory, mechanical ventilation, PEEP, FiO2, tidal volume, endotracheal tube, intubation, extubation, tracheostomy, bronchospasm, pulmonary edema, ARDS, hypoxemia, hypercapnia, apnea, dyspnea, wheezing, rales, rhonchi
+
+# 心血管系统
+cardiovascular, norepinephrine, epinephrine, dopamine, dobutamine, vasopressin, nitroprusside, nitroglycerin, arrhythmia, atrial fibrillation, ventricular tachycardia, asystole, cardiac output, central venous pressure, pulmonary artery catheter, IABP, STEMI, NSTEMI, cardiogenic shock, septic shock, hypovolemic shock
+
+# 神经系统
+neurology, GCS, Glasgow Coma Scale, ICP, intracranial pressure, cerebral perfusion pressure, seizure, stroke, meningitis, encephalopathy, sedation, analgesia, delirium, brain death, cranial nerve, pupillary response
+
+# 肾脏
+renal, CRRT, continuous renal replacement therapy, hemodialysis, creatinine, BUN, oliguria, anuria, AKI, acute kidney injury, nephrotoxic, hematuria, proteinuria, diuretic
+
+# 感染
+infectious, sepsis, severe sepsis, septic shock, SIRS, multi-organ dysfunction, antibiotic, culture, MRSA, VRE, Gram-negative, Gram-positive, bacteremia, fungemia, pneumonia, catheter-related infection, ventilator-associated pneumonia
+
+# 血液
+hematology, hemoglobin, hematocrit, platelet, thrombocytopenia, coagulation, INR, PT, PTT, fibrinogen, D-dimer, anticoagulation, heparin, warfarin, thromboembolism, DVT, PE
+
+# 代谢
+metabolic, lactate, glucose, insulin, hyperglycemia, hypoglycemia, metabolic acidosis, metabolic alkalosis, electrolyte, hyponatremia, hypernatremia, hypokalemia, hyperkalemia, hypocalcemia, hypercalcemia, magnesium, phosphate
+
+# 药物
+medications, propofol, midazolam, fentanyl, morphine, dexmedetomidine, norepinephrine, epinephrine, vasopressin, heparin, insulin, amiodarone, lidocaine, atropine, naloxone, flumazenil, albumin, blood products, FFP, packed RBC
+
+# 操作
+procedures, central line, arterial line, thoracentesis, paracentesis, lumbar puncture, bronchoscopy, PEG tube, nasogastric tube, Foley catheter, arterial blood gas
+
+# 监护
+monitoring, ICU, intensive care unit, mechanically ventilated, hemodynamically unstable, telemetry, bedside monitor, Swan-Ganz catheter, PiCCO, intracranial bolt, BIS monitor

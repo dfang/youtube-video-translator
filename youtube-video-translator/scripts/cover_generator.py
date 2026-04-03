@@ -7,7 +7,7 @@ def find_font(preferred_font_name="PingFang.ttc"):
     local_path = os.path.join(os.path.dirname(__file__), "..", "assets", "fonts", preferred_font_name)
     if os.path.exists(local_path):
         return local_path
-    
+
     # 2. Check Common System Paths
     system_paths = [
         "/System/Library/Fonts/Supplemental/Arial Unicode.ttf", # macOS
@@ -30,7 +30,7 @@ def get_optimal_font_size(draw, text, font_path, max_width, initial_size):
     font = ImageFont.truetype(font_path, size)
     bbox = draw.textbbox((0, 0), text, font=font)
     w = bbox[2] - bbox[0]
-    
+
     while w > max_width and size > 20:
         size -= 5
         font = ImageFont.truetype(font_path, size)
@@ -66,7 +66,7 @@ def create_cover(bg_path, output_path, title, subtitle):
 
     overlay = Image.new('RGBA', img.size, (0,0,0,0))
     d = ImageDraw.Draw(overlay)
-    d.rectangle([0, top_y, width, top_y + overlay_h], fill=(0, 0, 0, 165)) 
+    d.rectangle([0, top_y, width, top_y + overlay_h], fill=(0, 0, 0, 165))
     img = Image.alpha_composite(img.convert('RGBA'), overlay)
     draw = ImageDraw.Draw(img)
 

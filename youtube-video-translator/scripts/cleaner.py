@@ -20,6 +20,6 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("用法: python cleaner.py [TempDir]")
         sys.exit(1)
-    
+
     t_dir = sys.argv[1]
     cleanup_temp_files(t_dir)

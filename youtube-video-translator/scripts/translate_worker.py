@@ -12,7 +12,7 @@ TRANSLATION_PROMPT_TEMPLATE = '''你是专业字幕翻译器。请把下面 SRT 
 2) 每个块可输出单语中文，或双语格式 `英文\\N中文`。
 3) 不要删块、并块、拆块。
 4) 不要输出任何解释，只输出合法 SRT 内容。
-
+{glossary_section}
 待翻译批次：
 {batch_content}
 '''
@@ -31,17 +31,41 @@ def srt_time_to_seconds(srt_time):
     return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000.0
 
 
-def load_glossary(path):
+def load_glossary(path=None):
+    """
+    加载术语表。支持两种格式：
+    1) en -> zh (显式映射)
+    2) term1, term2 (仅提示词)
+    """
+    # 默认路径：references/terms.txt
+    if path is None:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        path = os.path.join(base_dir, "references", "terms.txt")
+
     glossary = {}
+    plain_terms = []
+
     if not path or not os.path.exists(path):
-        return glossary
+        return glossary, plain_terms
 
     with open(path, 'r', encoding='utf-8') as f:
         for line in f:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+
             if '->' in line:
-                en, zh = line.split('->', 1)
-                glossary[en.strip()] = zh.strip()
-    return glossary
+                parts = line.split('->', 1)
+                en, zh = parts[0].strip(), parts[1].strip()
+                glossary[en] = zh
+            else:
+                # 处理逗号分隔的术语
+                for t in line.split(','):
+                    t = t.strip()
+                    if t:
+                        plain_terms.append(t)
+
+    return glossary, plain_terms
 
 
 def parse_srt(path):
@@ -168,7 +192,20 @@ def generate_prompt_for_batch(batch_file, output_prompt_path=None):
     with open(batch_file, 'r', encoding='utf-8') as f:
         batch_content = f.read().strip()
 
-    prompt = TRANSLATION_PROMPT_TEMPLATE.format(batch_content=batch_content)
+    glossary, plain_terms = load_glossary()
+    glossary_section = ""
+    if glossary or plain_terms:
+        glossary_section = "\n参考术语 (Glossary/Reference)：\n"
+        if glossary:
+            for en, zh in glossary.items():
+                glossary_section += f"- {en} -> {zh}\n"
+        if plain_terms:
+            glossary_section += f"- {', '.join(plain_terms)}\n"
+
+    prompt = TRANSLATION_PROMPT_TEMPLATE.format(
+        glossary_section=glossary_section,
+        batch_content=batch_content
+    )
     if output_prompt_path:
         with open(output_prompt_path, 'w', encoding='utf-8') as f:
             f.write(prompt)

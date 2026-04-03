@@ -18,7 +18,7 @@ def convert_srt_to_ass(srt_path, ass_path):
     style.shadow = 0
     style.alignment = pysubs2.Alignment.BOTTOM_CENTER
     style.marginv = 15
-    
+
     subs.styles["Default"] = style
 
     for line in subs:
@@ -39,7 +39,7 @@ def convert_srt_to_ass(srt_path, ass_path):
                 zh = parts[0].strip()
                 eng = parts[1].strip()
                 line.text = f"{zh}\\N{{\\fs14}}{eng}"
-        
+
     subs.sort()
     subs.save(ass_path)
     print(f"pysubs2 conversion complete: {ass_path}")

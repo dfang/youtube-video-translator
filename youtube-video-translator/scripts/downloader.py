@@ -45,7 +45,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 3:
         print("用法: python downloader.py [URL] [OutputDir]")
         sys.exit(1)
-    
+
     video_url = sys.argv[1]
     out_dir = sys.argv[2]
     download_video(video_url, out_dir)

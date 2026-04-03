@@ -4,6 +4,12 @@ import shutil
 import sys
 from datetime import datetime, timezone
 
+# 尝试导入 state_manager 以支持全局状态更新
+try:
+    from state_manager import update_phase
+except ImportError:
+    update_phase = None
+
 from translate_worker import (
     detect_batch_completeness,
     generate_prompt_for_batch,
@@ -81,6 +87,21 @@ def command_start(source_srt, output_dir, batch_size=50, max_attempts=DEFAULT_MA
         "batches": batches,
     }
     path = save_state(state)
+
+    # 尝试更新全局状态
+    if update_phase:
+        video_id = None
+        if "translations" in output_dir:
+            parts = os.path.normpath(output_dir).split(os.sep)
+            try:
+                idx = parts.index("translations")
+                if idx + 1 < len(parts):
+                    video_id = parts[idx + 1]
+            except ValueError:
+                pass
+        if video_id:
+            update_phase(video_id, 4, "running")
+
     print(f"STARTED total_batches={len(batches)} state={path}")
 
 
@@ -266,6 +287,21 @@ def command_finalize(output_dir):
 
     state["final_verified"] = True
     save_state(state)
+
+    # 尝试更新全局状态
+    if update_phase:
+        video_id = None
+        if "translations" in output_dir:
+            parts = os.path.normpath(output_dir).split(os.sep)
+            try:
+                idx = parts.index("translations")
+                if idx + 1 < len(parts):
+                    video_id = parts[idx + 1]
+            except ValueError:
+                pass
+        if video_id:
+            update_phase(video_id, 4, "done", artifact=state["merged_output"])
+
     print(f"FINALIZE_OK merged_output={state['merged_output']}")
 
 
