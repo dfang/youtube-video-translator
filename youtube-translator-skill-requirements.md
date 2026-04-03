@@ -23,6 +23,8 @@
 - 字幕翻译优先使用当前会话/频道的 primary model。
 - 不应在该 Skill 流程中强制要求 Gemini API Key。
 - 仅当用户明确选择外部 provider（如 Gemini/OpenAI）时，才提示对应 API Key。
+- A-mode 下，批量字幕翻译属于当前会话内的直接模型调用，不应被实现成“没有外部 API key 就无法继续”。
+- 若批次翻译失败，允许在当前会话模型路径下重试；默认失败原因应是 SRT 结构校验不通过，而不是 `缺少翻译API`。
 - **`voiceover_engine`**: 生成中文配音音频。
 - **`video_composer`**: 合成最终视频。
 - **`cleaner`**: 根据需求清理中间文件。

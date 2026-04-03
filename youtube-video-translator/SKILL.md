@@ -27,6 +27,18 @@ Translate a YouTube video into Chinese with resumable, file-based phases.
   - `[Phase 4/10][DONE] batch i/N`
 - Keep status lines concise, Chinese-friendly, and machine-parseable.
 
+### Reporting Execution Protocol (Non-Optional)
+
+- Immediately before executing a phase command, send a standalone status line:
+  - `[Phase X/10][RUNNING] <phase_name>`
+- Immediately after command returns, send one terminal status line:
+  - success: `[Phase X/10][DONE] <phase_name> | output: <key_artifact>`
+  - skipped: `[Phase X/10][SKIP] <phase_name> | reason: <why_skipped>`
+  - failed: `[Phase X/10][FAILED] <phase_name> | cmd: <failed_cmd> | retry: <retry_cmd>`
+- For long-running commands (e.g., download/transcribe/mux), emit heartbeat every 60-120s:
+  - `[Phase X/10][HEARTBEAT] <phase_name> | elapsed: <seconds>s`
+- Do not run phase commands silently. If any command ran without pre-report, send a correction status line before next action.
+
 ## Orchestration Model (Hybrid)
 
 - Use **main agent** as orchestrator for end-to-end state management.
@@ -124,10 +136,23 @@ If transcription mode:
 
 ### 4.3 Batch preparation + translation workflow
 
-- Generate batches:
-  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" prepare "./translations/[VIDEO_ID]/temp/en_audited.srt" "./translations/[VIDEO_ID]/temp"`
+- Start Phase 4 runner:
+  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/phase4_runner.py" start "./translations/[VIDEO_ID]/temp/en_audited.srt" "./translations/[VIDEO_ID]/temp"`
+  - Optional retry cap:
+    - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/phase4_runner.py" start "./translations/[VIDEO_ID]/temp/en_audited.srt" "./translations/[VIDEO_ID]/temp" --max-attempts 3`
 - Translation model source (A-mode): use the current channel/session primary model directly.
 - Do NOT ask for or require Gemini/OpenAI/Claude API keys in this phase.
+- A-mode execution rule:
+  - Pull the next pending batch with:
+    - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/phase4_runner.py" next "./translations/[VIDEO_ID]/temp"`
+  - Translate the reported `batch_N.txt` directly in the current chat/session (main agent or translation sub-agent), using the session's primary model output as the translation result.
+  - Save the translation result to a temporary SRT file, then submit it with:
+    - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/phase4_runner.py" submit "./translations/[VIDEO_ID]/temp" N "./translations/[VIDEO_ID]/temp/batch_N.translated.srt"`
+  - Treat this as an in-channel inference step, not as an external provider API call.
+- Prohibited behavior in A-mode:
+  - Do not fail Phase 4 only because no external LLM API key is configured.
+  - Do not surface messages such as `缺少翻译API` / `需要 OpenAI API key` / `需要 Gemini API key` unless the user explicitly selected an external provider mode.
+  - Do not reframe direct session-model translation as "manual translation".
 - Dispatch each batch to a translation sub-agent (parallel allowed), contract:
   - Input: `./translations/[VIDEO_ID]/temp/batch_N.txt`
   - Output: `./translations/[VIDEO_ID]/temp/batch_N.translated.srt`
@@ -140,16 +165,19 @@ If transcription mode:
 - After each batch translation, immediately verify that batch:
   - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" verify "./translations/[VIDEO_ID]/temp/batch_N.txt" "./translations/[VIDEO_ID]/temp/batch_N.translated.srt"`
 - After all batches are done, run full per-batch verification sweep:
-  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" verify-batches "./translations/[VIDEO_ID]/temp"`
-  - (optional flags) `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" verify-batches "./translations/[VIDEO_ID]/temp" --max-cps 15 --glossary "./translations/[VIDEO_ID]/temp/glossary.txt"`
-- Before merge, enforce completeness check:
-  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" check-batches "./translations/[VIDEO_ID]/temp" "./translations/[VIDEO_ID]/temp/translation_manifest.json"`
-- Merge translated batches into:
-  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" merge "./translations/[VIDEO_ID]/temp" "./translations/[VIDEO_ID]/temp/zh_translated.srt"`
+  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/phase4_runner.py" status "./translations/[VIDEO_ID]/temp"`
+  - Machine-readable status:
+    - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/phase4_runner.py" status "./translations/[VIDEO_ID]/temp" --json`
+- Finalize Phase 4:
+  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/phase4_runner.py" finalize "./translations/[VIDEO_ID]/temp"`
   - Output:
   - `./translations/[VIDEO_ID]/temp/zh_translated.srt`
-- After merge, enforce final full-file verification:
-  - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/translate_worker.py" verify "./translations/[VIDEO_ID]/temp/en_audited.srt" "./translations/[VIDEO_ID]/temp/zh_translated.srt"`
+- If a batch output is invalid:
+  - Retry that batch in the same session/model path with a stricter prompt.
+  - If the batch exhausted its allowed attempts, reset it with:
+    - `python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/phase4_runner.py" retry "./translations/[VIDEO_ID]/temp" N`
+  - Only report failure after direct session-model retry still cannot produce a valid SRT-preserving result.
+  - Valid failure reasons include malformed SRT, verification mismatch, or repeated structure drift; missing external API credentials is not a valid A-mode failure reason.
 
 ### 4.4 Translation verification (strict)
 
@@ -249,3 +277,8 @@ Run only when user explicitly asks to publish/save draft (e.g., `publish to Bili
   - `[Phase X/10][FAILED] <phase_name> | cmd: <failed_cmd> | retry: <retry_cmd>`
   - one-line root cause summary in Chinese
 - Resume from last completed phase; do not redo completed outputs.
+
+## Session Reload Note (OpenClaw)
+
+- OpenClaw may cache skill instructions at run start.
+- After updating `SKILL.md`, restart the task/session before expecting new progress-report behavior.

@@ -4,6 +4,13 @@
 
 ### Added
 - Added `check-batches` command in `youtube-video-translator/scripts/translate_worker.py` to detect missing/extra translated batch files before merge.
+- Added `youtube-video-translator/scripts/phase4_runner.py` to make Phase 4 resumable and enforce the session-model translation workflow via:
+  - `start`
+  - `next`
+  - `submit`
+  - `status`
+  - `finalize`
+  - `retry`
 - Added stricter translation verification in `youtube-video-translator/scripts/translate_worker.py`:
   - block count consistency
   - subtitle index consistency
@@ -16,11 +23,15 @@
 
 ### Changed
 - Updated batch translation workflow in `youtube-video-translator/SKILL.md` to enforce:
-  1. `prepare`
-  2. per-batch translation
-  3. `check-batches`
-  4. `merge`
-  5. strict `verify`
+  1. `phase4_runner.py start`
+  2. `phase4_runner.py next`
+  3. per-batch session-model translation
+  4. `phase4_runner.py submit`
+  5. `phase4_runner.py finalize`
+- Updated `youtube-video-translator/scripts/phase4_runner.py` with:
+  - `--max-attempts` start option
+  - `status --json` machine-readable output
+  - `retry` command to reset exhausted failed batches
 - Updated `verify` behavior in `youtube-video-translator/scripts/translate_worker.py` to return non-zero exit code on integrity failures.
 - Updated `youtube-video-translator/scripts/video_muxer.py` output argument handling to accept project dir, `final` dir, or explicit `.mp4` file path, preventing nested `final_video.mp4/final_video.mp4` output paths.
 - Updated `youtube-video-translator/scripts/translate_worker.py` optional arg parsing for `verify` and `verify-batches`:
