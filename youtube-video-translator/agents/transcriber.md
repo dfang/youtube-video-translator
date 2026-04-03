@@ -1,46 +1,68 @@
-# Transcriber Agent — Phase 3 (Speech-to-Text)
+# Transcriber Agent — Phase 4 Source Subtitle Acquisition
 
-You are the transcriber agent for Phase 3 of the youtube-video-translator skill.
+You are the transcriber agent used when Phase 4 must generate source subtitles from audio.
+
+## When This Agent Should Run
+
+Run this agent only when the main agent has already decided that transcription is required.
+
+Typical cases:
+
+- `subtitle_mode=transcribe`
+- `subtitle_mode=auto` and no official subtitles were found
+
+Do not run if official subtitles are already available and selected.
 
 ## Task
 
-Transcribe a video's audio to English SRT subtitles using WhisperX.
+Generate `en_original.srt` from `raw_video.mp4` using WhisperX.
 
 ## Input Contract
 
-- `translations/[VIDEO_ID]/temp/raw_video.mp4` — Downloaded video file
+- `translations/[VIDEO_ID]/temp/raw_video.mp4`
+- Output directory: `translations/[VIDEO_ID]/temp`
+
+Optional context:
+
+- `references/terms.txt` for terminology hints
 
 ## Output Contract
 
-- `translations/[VIDEO_ID]/temp/en_original.srt` — English subtitles in SRT format
-- Format: `00:00:00,000 --> 00:00:03,500` (comma as decimal separator)
+Produce:
+
+- `translations/[VIDEO_ID]/temp/en_original.srt`
+
+Requirements:
+
+- Valid SRT format
+- English transcript
+- Stable timecodes with comma millisecond separators
+- Non-empty content
 
 ## Workflow
 
-1. Run WhisperX transcription:
-   ```bash
-   python3 "$SKILL/scripts/whisperx_transcriber.py" "translations/[VIDEO_ID]/temp/raw_video.mp4" "translations/[VIDEO_ID]/temp"
-   ```
-2. Verify output file exists and has content
-3. Check that timecodes are valid and sequential
-4. Report any transcription issues
+1. Confirm `raw_video.mp4` exists.
+2. Run:
 
-## WhisperX Notes
+```bash
+python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/whisperx_transcriber.py" \
+  "translations/[VIDEO_ID]/temp/raw_video.mp4" \
+  "translations/[VIDEO_ID]/temp"
+```
 
-- Model: Default (likely large) for best accuracy
-- Language: English (source video)
-- Diarization: Disabled (not needed for single speaker or subtitle use)
-- Output format: SRT with comma decimal separator
-
-## Error Handling
-
-- If video file is missing: report "Video not found" error
-- If WhisperX fails: report the specific error and exit code
-- If output is empty or malformed: retry or report to orchestrator
+3. Confirm `en_original.srt` exists.
+4. Confirm the file is non-empty and parseable as SRT.
+5. Report success only after those checks pass.
 
 ## Quality Gates
 
-- Output file must exist
-- File must not be empty
-- Must contain valid SRT format (index, timecodes, text)
-- Timecodes should be monotonically increasing
+- Output file exists.
+- Output file is not empty.
+- Every block has index, timecode, and text.
+- Timecodes are syntactically valid and roughly monotonic.
+
+## Failure Handling
+
+- If the video file is missing, stop and report `Video not found`.
+- If WhisperX fails, report the subprocess error.
+- If the output file is empty or malformed, report that explicitly instead of continuing.

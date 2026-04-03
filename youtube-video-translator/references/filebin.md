@@ -2,6 +2,12 @@
 
 Use Filebin to upload `final_video.mp4` and return a shareable preview URL.
 
+This reference is intentionally minimal. The canonical persisted artifact for Phase 8 is still:
+
+- `./translations/[VIDEO_ID]/final/preview.txt`
+
+The file must contain exactly one URL line.
+
 ## Endpoint
 
 - Base: `https://filebin.net`
@@ -57,3 +63,4 @@ https://filebin.net/[VIDEO_ID]/final_video.mp4
 - Filebin links are temporary and intended for quick sharing/preview.
 - Use `VIDEO_ID` as `BIN` for deterministic preview path.
 - For large video files, keep network retries enabled in your shell environment if needed.
+- Do not write extra JSON or commentary into `preview.txt`.
