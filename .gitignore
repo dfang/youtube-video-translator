@@ -1,3 +1,4 @@
 .DS_Store
 translations/
 logs/
+__pycache__

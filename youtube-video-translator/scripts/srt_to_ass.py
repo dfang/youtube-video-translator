@@ -23,16 +23,22 @@ def convert_srt_to_ass(srt_path, ass_path):
 
     for line in subs:
         raw_text = line.text.strip()
-        parts = raw_text.split(r'\N')
-        if len(parts) >= 2:
-            eng = parts[0].strip()
-            zh = parts[1].strip()
-            line.text = f"{zh}\\N{{\\fs14}}{eng}"
+        # SRT format: first line = Chinese (top), second line = English (bottom)
+        # \N in the original file is a literal string, not an escape sequence
+        # After fix, SRT should have actual newlines between Chinese and English
+        if r'\N' in raw_text:
+            parts = raw_text.split(r'\N')
+            if len(parts) >= 2:
+                zh = parts[0].strip()
+                eng = parts[1].strip()
+                line.text = f"{zh}\\N{{\\fs14}}{eng}"
         elif '\n' in raw_text:
             parts = raw_text.split('\n')
-            eng = parts[0].strip()
-            zh = parts[1].strip()
-            line.text = f"{zh}\\N{{\\fs14}}{eng}"
+            if len(parts) >= 2:
+                # parts[0] = Chinese (top), parts[1] = English (bottom)
+                zh = parts[0].strip()
+                eng = parts[1].strip()
+                line.text = f"{zh}\\N{{\\fs14}}{eng}"
         
     subs.sort()
     subs.save(ass_path)

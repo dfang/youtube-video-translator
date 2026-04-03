@@ -10,6 +10,10 @@ DEST_DIR="$HOME/.agents/skills/$SKILL_DIR"
 
 echo "Installing YouTube Video Translator..."
 
+# clear old installation
+rm -rf "$HOME/.claude/skills/$SKILL_DIR"
+rm -rf "$HOME/.openclaw/skills/$SKILL_DIR"
+
 # 1. Dependency Check
 echo "Checking system dependencies..."
 for cmd in ffmpeg yt-dlp python3 pip3; do
