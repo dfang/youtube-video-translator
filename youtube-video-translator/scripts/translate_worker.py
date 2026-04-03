@@ -5,14 +5,14 @@ import json
 from datetime import datetime
 
 
-TRANSLATION_PROMPT_TEMPLATE = '''你是专业字幕翻译器。请把下面 SRT 批次翻译为中文。
+TRANSLATION_PROMPT_TEMPLATE = '''你是专业字幕翻译器。请把下面 SRT 批次翻译为简体中文。
 
 硬性要求：
 1) 保留每个字幕块的序号与时间轴原样不变。
-2) 每个块可输出单语中文，或双语格式 `英文\\N中文`。
+2) 每个块只输出中文译文，不要保留英文原文，不要输出双语格式。
 3) 不要删块、并块、拆块。
 4) 不要输出任何解释，只输出合法 SRT 内容。
-{glossary_section}
+{glossary_section}{context_section}
 待翻译批次：
 {batch_content}
 '''
@@ -188,7 +188,7 @@ def write_batches(srt_path, output_dir='.', batch_size=50):
     return batch_files, manifest_path
 
 
-def generate_prompt_for_batch(batch_file, output_prompt_path=None):
+def generate_prompt_for_batch(batch_file, output_prompt_path=None, context_file=None):
     with open(batch_file, 'r', encoding='utf-8') as f:
         batch_content = f.read().strip()
 
@@ -202,8 +202,23 @@ def generate_prompt_for_batch(batch_file, output_prompt_path=None):
         if plain_terms:
             glossary_section += f"- {', '.join(plain_terms)}\n"
 
+    context_section = ""
+    if context_file and os.path.exists(context_file):
+        try:
+            with open(context_file, 'r', encoding='utf-8') as f:
+                context_content = f.read().strip()
+                if context_content:
+                    # 只取最后几块作为上下文，避免超出 token 限制
+                    context_blocks = re.split(r'\n\s*\n', context_content)
+                    last_blocks = context_blocks[-5:] # 取最后 5 块
+                    context_section = "\n前文参考 (Context from previous blocks):\n"
+                    context_section += "\n\n".join(last_blocks).strip() + "\n"
+        except Exception as e:
+            print(f"警告: 读取上下文文件失败: {e}")
+
     prompt = TRANSLATION_PROMPT_TEMPLATE.format(
         glossary_section=glossary_section,
+        context_section=context_section,
         batch_content=batch_content
     )
     if output_prompt_path:
@@ -272,7 +287,7 @@ def merge_translated_batches(translated_dir, output_srt_path, manifest_path=None
 def verify_translated_srt(original_path, translated_path, glossary_path=None, max_cps=15):
     orig_blocks, orig_errors = parse_srt(original_path)
     trans_blocks, trans_errors = parse_srt(translated_path)
-    glossary = load_glossary(glossary_path)
+    glossary, plain_terms = load_glossary(glossary_path)
 
     issues = []
 
@@ -304,6 +319,9 @@ def verify_translated_srt(original_path, translated_path, glossary_path=None, ma
         if not tb['text'].strip():
             issues.append(f"[空翻译] 块{tb['index']} 译文为空")
 
+        if '\\N' in tb['text']:
+            issues.append(f"[输出格式错误] 块{tb['index']} 含有双语或 ASS 换行标记 \\N；权威译文应为纯中文 SRT")
+
         if is_likely_untranslated(tb['text']):
             issues.append(f"[疑似漏翻] 块{tb['index']} 主要为英文/非中文")
 
@@ -319,6 +337,14 @@ def verify_translated_srt(original_path, translated_path, glossary_path=None, ma
                 if en.lower() in orig_text_lower and zh and zh not in zh_text:
                     issues.append(
                         f"[术语不一致] 块{tb['index']}: 检测到术语 {en!r}，期望包含 {zh!r}"
+                    )
+        if plain_terms:
+            orig_text_lower = ob['text'].lower()
+            zh_text = extract_zh_text(tb['text'])
+            for term in plain_terms:
+                if term.lower() in orig_text_lower and term not in zh_text and term.lower() not in zh_text.lower():
+                    issues.append(
+                        f"[术语可疑] 块{tb['index']}: 原文包含术语 {term!r}，译文中未显式保留，请人工复核"
                     )
 
     return issues

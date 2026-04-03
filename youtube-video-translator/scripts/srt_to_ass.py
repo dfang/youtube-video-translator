@@ -11,7 +11,7 @@ def convert_srt_to_ass(srt_path, ass_path):
     # Check if we should fallback if PingFang is missing?
     # For now, let's keep the name and assume font-config/OS handles it.
     style.fontname = "PingFang SC Semibold"
-    style.fontsize = 16
+    style.fontsize = 18
     style.primarycolor = pysubs2.Color(0, 0, 0)
     style.outlinecolor = pysubs2.Color(255, 255, 255)
     style.outline = 1

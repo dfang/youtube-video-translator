@@ -120,10 +120,23 @@ def command_next(output_dir):
         print("NO_PENDING_BATCH")
         return
 
-    prompt = generate_prompt_for_batch(batch["batch_file"], batch["prompt_file"])
+    # 寻找上一个已验证的批次作为上下文
+    context_file = None
+    prev_batch_id = batch["batch_id"] - 1
+    if prev_batch_id >= 1:
+        try:
+            prev_batch = find_batch(state, prev_batch_id)
+            if prev_batch["status"] == "verified" and os.path.exists(prev_batch["translated_file"]):
+                context_file = prev_batch["translated_file"]
+        except Exception:
+            pass
+
+    prompt = generate_prompt_for_batch(batch["batch_file"], batch["prompt_file"], context_file=context_file)
     print(f"BATCH_ID={batch['batch_id']}")
     print(f"BATCH_FILE={batch['batch_file']}")
     print(f"PROMPT_FILE={batch['prompt_file']}")
+    if context_file:
+        print(f"CONTEXT_FILE={context_file}")
     print(f"TRANSLATED_FILE={batch['translated_file']}")
     print("PROMPT_BEGIN")
     print(prompt.rstrip())

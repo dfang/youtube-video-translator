@@ -31,7 +31,9 @@ def get_state_root(video_id: str) -> Path:
 
 def get_state_path(video_id: str) -> Path:
     """Return path to the state file."""
-    return get_state_root(video_id) / STATE_FILENAME
+    path = get_state_root(video_id) / STATE_FILENAME
+    # print(f"DEBUG: state_path={path.resolve()}")
+    return path
 
 
 def load_state(video_id: str) -> dict:
@@ -40,9 +42,15 @@ def load_state(video_id: str) -> dict:
     """
     path = get_state_path(video_id)
     if path.exists():
-        with open(path) as f:
-            return json.load(f)
+        try:
+            with open(path) as f:
+                state = json.load(f)
+                # print(f"[DEBUG] Loaded state from {path.resolve()}")
+                return state
+        except Exception as e:
+            print(f"[WARNING] Failed to load state from {path}: {e}")
 
+    # Return initial state
     return {
         "video_id": video_id,
         "current_phase": -1,
@@ -56,9 +64,14 @@ def load_state(video_id: str) -> dict:
 def save_state(video_id: str, state: dict) -> None:
     """Save state to disk."""
     path = get_state_path(video_id)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
-        json.dump(state, f, indent=2, ensure_ascii=False)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            json.dump(state, f, indent=2, ensure_ascii=False)
+        # 显式输出状态保存信息，以便 agent 和用户感知
+        print(f"[DEBUG] State saved to: {path.resolve()}")
+    except Exception as e:
+        print(f"[ERROR] Failed to save state to {path}: {e}")
 
 
 def update_phase(

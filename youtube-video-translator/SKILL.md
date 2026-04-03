@@ -13,6 +13,7 @@ Translate a YouTube video into Chinese with resumable, file-based phases.
 - **macOS Recommendation**: Install `ffmpeg-full` via Homebrew to ensure all capabilities are present:
   ```bash
   brew install ffmpeg-full
+  brew link ffmpeg-full
   ```
 - **Fallback**: The skill will attempt to find `ffmpeg-full` or `ffmpeg` with `libass` support automatically. If environment check fails, follow the suggested fix commands.
 
@@ -24,47 +25,37 @@ On every invocation, read this file first to determine where to resume.
 
 ## Operating Style
 
-- Keep context minimal. Load only the current phase.
-- Prefer scripts over manual steps; refer to `scripts/` for implementation.
-- Before each phase, announce in Chinese (e.g., `正在进入字幕处理阶段...`).
-- Always emit structured status lines per the Phase Progress Reporting section.
-- Let `phase_runner.py` own heartbeat emission for long-running subprocess phases.
+- **Keep context minimal**: Only load files and state relevant to the current phase.
+- **Proactive Reporting (Critical)**: Always inform the user before starting a phase and after it completes.
+- **Iterative Execution**: To ensure the user sees progress, **execute phases one by one** using the `--phase` flag. Do not run all phases at once unless specifically requested.
+- **Chinese Feedback**: All user-facing progress updates should be in Chinese.
+- **State Check**: Before starting any work, check `.phase-state.json` to see if a previous run can be resumed.
 
 ## Canonical Paths
 
 - Skill root: `$HOME/.openclaw/skills/youtube-video-translator`
-- Root: `./translations/[VIDEO_ID]/`
-- Temp: `./translations/[VIDEO_ID]/temp/`
-- Final: `./translations/[VIDEO_ID]/final/`
+- Root: `./translations/[VIDEO_ID]/` (Created in the project's current working directory)
 - State: `./translations/[VIDEO_ID]/.phase-state.json`
 
 ## Phase Entry Point
 
-For any phase, use the unified phase runner:
+For any phase, use the unified phase runner. It is recommended to run one phase at a time to keep the user informed:
 
 ```bash
-python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/phase_runner.py" run --video-id [VIDEO_ID] --phase [N]
+# Example: Running Phase 3
+python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/phase_runner.py" run --video-id [VIDEO_ID] --phase 3
 ```
 
-The runner handles: state loading, phase skipping (if already done), execution, state update.
+The runner handles: state loading, phase skipping (if already done), execution, and state update.
 
-## Phase Progress Reporting (Non-Negotiable)
+## Phase Progress Reporting (Directives for Agent)
 
-Every phase transition emits one structured line:
+The agent MUST relay progress to the user. When you see a structured output line from the runner, translate its meaning for the user:
 
-```
-[Phase X/10][RUNNING] <phase_name>
-[Phase X/10][DONE] <phase_name> | output: <artifact>
-[Phase X/10][WAIT] <phase_name> | reason: <why>
-[Phase X/10][SKIP] <phase_name> | reason: <why>
-[Phase X/10][FAILED] <phase_name> | error: <msg>
-```
-
-Long phases emit heartbeats every 60-120s:
-
-```
-[Phase X/10][HEARTBEAT] <phase_name> | elapsed: <seconds>s
-```
+- `[Phase X/10][RUNNING]`: Tell the user: "正在执行阶段 X: <name>..."
+- `[Phase X/10][DONE]`: Tell the user: "阶段 X 已完成。输出文件: <artifact>"
+- `[Phase X/10][HEARTBEAT]`: (Optional) Update user if a phase is taking a long time.
+- `[Phase X/10][FAILED]`: Show the error and suggest a fix.
 
 ## Phase 1 Intent Schema
 
@@ -96,13 +87,24 @@ Rules:
 - **Script**: `scripts/env_check.py`
 - **Output**: Pass/fail + fix commands
 
-### Phase 1: Gather Intents
+### Phase 1: Gather Intents (Interactive)
 
 - **Runner**: `phase_runner.py --phase 1 --video-id [ID]`
-- **Mode**: Interactive (main agent asks in Chinese)
-- **Collected**: Audio choice, subtitle mode, subtitle layout, publish intent, cleanup intent
-- **Saved to**: `temp/intent.json`
-- **Wait**: Explicit user confirmation before proceeding (`confirmed: true`)
+- **Agent Action**: **Ask all intent questions at once in a single message.** Do not ask them one by one.
+- **Questions**:
+  1. 音频模式 (audio_mode): 原声 (original) 还是 语音合成 (voiceover)?
+  2. 字幕模式 (subtitle_mode): 自动 (auto), 仅官方 (official_only), 还是 强制转录 (transcribe)?
+  3. 字幕布局 (subtitle_layout): 双语 (bilingual) 还是 仅中文 (chinese_only)?
+  4. 是否发布到 B 站 (publish)? (true/false)
+  5. 任务结束后是否清理临时文件 (cleanup)? (true/false)
+- **Default Options**:
+  - `audio_mode`: `original`
+  - `subtitle_mode`: `auto`
+  - `subtitle_layout`: `bilingual`
+  - `publish`: `false`
+  - `cleanup`: `false`
+- **Implicit Consent**: If the user says "开始", "start", "go", or similar without answering specific questions, **immediately use the default options**, write `temp/intent.json` with `confirmed: true`, and proceed to the next phase.
+- **Saved to**: `temp/intent.json` (must be valid JSON and `confirmed` set to `true` to pass Phase 1).
 
 ### Phase 2: Setup
 

@@ -86,11 +86,11 @@ def transcribe_with_whisperx(video_path, output_dir):
             pass
 
     if update_phase and video_id:
-        update_phase(video_id, 3, "running")
+        update_phase(video_id, 4, "running")
 
     if not FFMPEG:
         if update_phase and video_id:
-            update_phase(video_id, 3, "failed", error="FFmpeg not found")
+            update_phase(video_id, 4, "failed", error="FFmpeg not found")
         raise RuntimeError("FFmpeg not found. Please install ffmpeg/ffmpeg-full and retry.")
 
     # 提取音频
@@ -117,7 +117,7 @@ def transcribe_with_whisperx(video_path, output_dir):
         ], check=True)
     except subprocess.CalledProcessError as e:
         if update_phase and video_id:
-            update_phase(video_id, 3, "failed", error=f"WhisperX failed: {str(e)}")
+            update_phase(video_id, 4, "failed", error=f"WhisperX failed: {str(e)}")
         raise
 
     # 重命名生成的字幕为 en_original.srt
@@ -128,11 +128,11 @@ def transcribe_with_whisperx(video_path, output_dir):
         os.rename(generated_srt, final_srt)
         print(f"转录完成: {final_srt}")
         if update_phase and video_id:
-            update_phase(video_id, 3, "done", artifact=final_srt)
+            update_phase(video_id, 4, "done", artifact=final_srt)
     else:
         print("WhisperX 未能生成字幕。")
         if update_phase and video_id:
-            update_phase(video_id, 3, "failed", error="SRT not generated")
+            update_phase(video_id, 4, "failed", error="SRT not generated")
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
