@@ -15,13 +15,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 _dev_root = Path(__file__).resolve().parent.parent
-_installed_root = Path(os.environ.get("HOME")) / ".openclaw/skills/youtube-video-translator"
-
-# Prefer installed path if it has agents/ (production), otherwise use dev checkout
-if _installed_root.exists() and (_installed_root / "agents").exists():
-    SKILL_ROOT = _installed_root
-else:
-    SKILL_ROOT = _dev_root
+# Always use the actual location of the running script.
+# When OpenClaw invokes the installed skill, __file__.resolve() already points there.
+SKILL_ROOT = _dev_root
 
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 
@@ -34,6 +30,8 @@ INTENT_ENUMS = {
     "subtitle_mode": {"auto", "official_only", "transcribe"},
     "subtitle_layout": {"bilingual", "chinese_only"},
 }
+
+STYLE_CONFIG_FILENAME = "subtitle_style.json"
 
 
 def get_video_dir(video_id: str) -> Path:
@@ -211,17 +209,73 @@ def ensure_audited_subtitles(temp_dir: Path) -> tuple[int, str]:
     return 0, str(en_audited)
 
 
+def get_subtitle_style_path(temp_dir: Path) -> Path:
+    return temp_dir / STYLE_CONFIG_FILENAME
+
+
+def build_default_subtitle_style_config() -> dict:
+    return {
+        "preset": "mobile_default",
+        "notes": "推荐先用 mobile_default。若预览效果不好，只修改 preset，然后重新运行 phase 7 重新烧录字幕。",
+        "available_presets": {
+            "mobile_default": {
+                "label": "移动端默认（推荐）",
+                "description": "白字、黑描边、中文 18 号，适合手机竖握和横握观看。",
+            },
+            "high_contrast": {
+                "label": "高对比",
+                "description": "更粗描边、更大字号，适合亮背景或细节复杂画面。",
+            },
+            "soft_dark": {
+                "label": "柔和暗边",
+                "description": "暖白字配深灰描边，观感更柔和。",
+            },
+            "bold_yellow": {
+                "label": "黄色强调",
+                "description": "黄字深描边，适合教程、解说类内容。",
+            },
+        },
+    }
+
+
+def ensure_subtitle_style_config(temp_dir: Path) -> Path:
+    style_path = get_subtitle_style_path(temp_dir)
+    if not style_path.exists():
+        style_path.write_text(
+            json.dumps(build_default_subtitle_style_config(), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    return style_path
+
+
+def target_is_fresh(target: Path, sources: list[Path]) -> bool:
+    if not target.exists():
+        return False
+    target_mtime = target.stat().st_mtime
+    for source in sources:
+        if source.exists() and source.stat().st_mtime > target_mtime:
+            return False
+    return True
+
+
 def ensure_chinese_ass(temp_dir: Path) -> tuple[int, str]:
     zh_translated = temp_dir / "zh_translated.srt"
     zh_only_ass = temp_dir / "zh_only.ass"
+    style_config = ensure_subtitle_style_config(temp_dir)
 
-    if zh_only_ass.exists():
+    if target_is_fresh(zh_only_ass, [zh_translated, style_config, SKILL_ROOT / "scripts" / "srt_to_ass.py"]):
         return 0, str(zh_only_ass)
     if not zh_translated.exists():
         return 1, "zh_translated.srt not found"
 
     exit_code, output = run_subprocess(
-        ["python3", str(SKILL_ROOT / "scripts/srt_to_ass.py"), str(zh_translated), str(zh_only_ass)]
+        [
+            "python3",
+            str(SKILL_ROOT / "scripts/srt_to_ass.py"),
+            str(zh_translated),
+            str(zh_only_ass),
+            str(style_config),
+        ]
     )
     if exit_code != 0:
         return exit_code, output
@@ -235,8 +289,12 @@ def ensure_bilingual_ass(temp_dir: Path) -> tuple[int, str]:
     en_audited = temp_dir / "en_audited.srt"
     bilingual_srt = temp_dir / "bilingual.srt"
     bilingual_ass = temp_dir / "bilingual.ass"
+    style_config = ensure_subtitle_style_config(temp_dir)
 
-    if bilingual_ass.exists():
+    if target_is_fresh(
+        bilingual_ass,
+        [zh_translated, en_audited, style_config, SKILL_ROOT / "scripts" / "srt_to_ass.py"],
+    ):
         return 0, str(bilingual_ass)
 
     if not zh_translated.exists():
@@ -265,7 +323,13 @@ def ensure_bilingual_ass(temp_dir: Path) -> tuple[int, str]:
 
     write_srt_blocks(bilingual_srt, merged)
     exit_code, output = run_subprocess(
-        ["python3", str(SKILL_ROOT / "scripts/srt_to_ass.py"), str(bilingual_srt), str(bilingual_ass)]
+        [
+            "python3",
+            str(SKILL_ROOT / "scripts/srt_to_ass.py"),
+            str(bilingual_srt),
+            str(bilingual_ass),
+            str(style_config),
+        ]
     )
     if exit_code != 0:
         return exit_code, output
@@ -287,7 +351,8 @@ def ensure_subtitle_overlay(temp_dir: Path, intent: dict | None = None) -> tuple
         return exit_code, source_ass
 
     source_path = Path(source_ass)
-    overlay.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
+    if not target_is_fresh(overlay, [source_path]):
+        overlay.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
     return 0, str(overlay)
 
 
@@ -627,18 +692,19 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
 
     if phase == 7:
         video = temp / "raw_video.mp4"
-        ass = temp / "subtitle_overlay.ass"
         voiceover = temp / "zh_voiceover.mp3"
         final_video = final / "final_video.mp4"
 
         if not video.exists():
             return "failed", "raw_video.mp4 not found"
-        if not ass.exists():
-            exit_code, message = ensure_subtitle_overlay(temp, intent)
-            if exit_code != 0:
-                return "failed", message
-            ass = Path(message)
-        if final_video.exists():
+        exit_code, message = ensure_subtitle_overlay(temp, intent)
+        if exit_code != 0:
+            return "failed", message
+        ass = Path(message)
+        freshness_sources = [video, ass]
+        if voiceover.exists():
+            freshness_sources.append(voiceover)
+        if final_video.exists() and target_is_fresh(final_video, freshness_sources):
             return "done", str(final_video)
 
         audio_arg = str(voiceover) if voiceover.exists() else ""
@@ -677,6 +743,9 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
             return "failed", output or "file upload failed"
 
         preview_file = final / "preview.txt"
+        if preview_file.exists() and target_is_fresh(preview_file, [video]):
+            return "done", str(preview_file)
+
         preview_file.write_text(url, encoding="utf-8")
         return "done", str(preview_file)
 
@@ -725,12 +794,13 @@ def report_status(phase: int, status: str, msg: str = "", artifact: str = "") ->
 
 def run_single_phase(video_id: str, phase: int, intent: dict | None = None) -> str:
     next_pending = get_next_pending_phase(video_id)
+    stale = phase_needs_refresh(video_id, phase, intent)
 
-    if is_phase_completed(video_id, phase):
+    if is_phase_completed(video_id, phase) and not stale:
         report_status(phase, "SKIP", "already completed")
         return "done"
 
-    if phase < next_pending:
+    if phase < next_pending and not stale:
         report_status(phase, "SKIP", f"phase {phase} already completed")
         return "done"
 
@@ -758,6 +828,39 @@ def run_single_phase(video_id: str, phase: int, intent: dict | None = None) -> s
     update_phase(video_id, phase, "failed", error=msg)
     report_status(phase, "FAILED", msg=msg)
     return "failed"
+
+
+def phase_needs_refresh(video_id: str, phase: int, intent: dict | None = None) -> bool:
+    temp = get_temp_dir(video_id)
+    final = get_final_dir(video_id)
+
+    if phase == 7:
+        final_video = final / "final_video.mp4"
+        ass = temp / "subtitle_overlay.ass"
+        video = temp / "raw_video.mp4"
+        voiceover = temp / "zh_voiceover.mp3"
+        style_config = get_subtitle_style_path(temp)
+        layout = (intent or {}).get("subtitle_layout", "bilingual")
+        subtitle_sources = [temp / "zh_translated.srt", style_config]
+        if layout == "bilingual":
+            subtitle_sources.append(temp / "en_audited.srt")
+        if not ass.exists() or not target_is_fresh(ass, subtitle_sources):
+            return True
+        if not final_video.exists():
+            return True
+        sources = [video, ass]
+        if voiceover.exists():
+            sources.append(voiceover)
+        return not target_is_fresh(final_video, sources)
+
+    if phase == 8:
+        final_video = final / "final_video.mp4"
+        preview_file = final / "preview.txt"
+        if not final_video.exists() or not preview_file.exists():
+            return True
+        return not target_is_fresh(preview_file, [final_video])
+
+    return False
 
 
 def run_from_state(video_id: str, intent: dict | None = None) -> str:

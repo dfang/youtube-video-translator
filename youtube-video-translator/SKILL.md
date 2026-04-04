@@ -136,12 +136,18 @@ Rules:
   - `temp/zh_translated.srt`
   - `temp/bilingual.ass` or `temp/zh_only.ass`
   - `temp/subtitle_overlay.ass` (canonical subtitle artifact consumed by Phase 7)
+  - `temp/subtitle_style.json` (subtitle style preset selection and optional overrides)
 - **Intent-aware behavior**:
   - `subtitle_mode=auto`: use official subtitles if found, otherwise transcribe
   - `subtitle_mode=official_only`: require official subtitles, fail clearly if unavailable
   - `subtitle_mode=transcribe`: skip official subtitles and force WhisperX transcription
   - `subtitle_layout=bilingual`: generate `bilingual.ass`
   - `subtitle_layout=chinese_only`: generate `zh_only.ass`
+- **Style presets**:
+  - `mobile_default` (recommended): white text, black outline, Chinese size 18, tuned for phones
+  - `high_contrast`: larger text and heavier outline for bright or busy frames
+  - `soft_dark`: softer warm-white text with dark outline
+  - `bold_yellow`: yellow emphasis style for tutorials and commentary
 - **Subagent delegation**: Each `batch_N.txt` → `batch_N.translated.srt` can run in parallel subagent
 - **Fallback**: If subagents are unavailable, main agent may process batches serially using `phase4_runner.py next/submit/finalize`
 - **Verification**: `translate_worker.py verify` after each batch and at end
@@ -173,6 +179,10 @@ Rules:
 - **Script**: `scripts/video_muxer.py`
 - **Output**: `final/final_video.mp4`
 - **Modes**: `--original-audio` or with voiceover
+- **Rerender workflow**:
+  - If preview quality is poor, edit `temp/subtitle_style.json` and change `preset`
+  - Re-run Phase 7 to regenerate `.ass` and reburn subtitles without retranslating
+  - Re-run Phase 8 to upload a fresh preview if needed
 
 ### Phase 8: Upload Preview
 
