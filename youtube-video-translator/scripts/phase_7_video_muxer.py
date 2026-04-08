@@ -29,41 +29,29 @@ def get_subtitle_style_path(temp_dir: Path) -> Path:
 
 def build_default_subtitle_style_config() -> dict:
     return {
-        "preset": "mobile_default",
-        "notes": "推荐先用 mobile_default。若预览效果不好，只修改 preset，然后重新运行 phase 7 重新烧录字幕。",
+        "preset": "modern_bilingual",
+        "notes": "修改 preset 后重新运行 phase 7 即可应用。",
         "available_presets": {
-            "mobile_default": {
-                "label": "移动端默认（推荐）",
-                "description": "白字、黑描边、中文 18 号，适合手机竖握和横握观看。",
+            "modern_bilingual": {
+                "label": "现代双语（推荐）",
+                "description": "细致的描边，中文 18/英文 14，阅读舒适感最佳。",
             },
-            "high_contrast": {
-                "label": "高对比",
-                "description": "更粗描边、更大字号，适合亮背景或细节复杂画面。",
+            "mobile_simple": {
+                "label": "简约移动端",
+                "description": "无衬线体，适合快节奏短视频。",
             },
-            "soft_dark": {
-                "label": "柔和暗边",
-                "description": "暖白字配深灰描边，观感更柔和。",
+            "cinema_standard": {
+                "label": "影院标准",
+                "description": "低对比度，适合沉浸式观影。",
             },
             "bold_yellow": {
-                "label": "黄色强调",
-                "description": "黄字深描边，适合教程、解说类内容。",
+                "label": "强调黄色",
+                "description": "适合教程/Vlog讲解。",
             },
-            "black_white_thin": {
-                "label": "黑字白描细",
-                "description": "黑字配白描边（1.5px），中文 18/英文 13，适合浅色背景。",
-            },
-            "black_white_medium": {
-                "label": "黑字白描中",
-                "description": "黑字配白描边（2.5px），中文 20/英文 14，中等醒目。",
-            },
-            "black_white_thick": {
-                "label": "黑字白描粗",
-                "description": "黑字配白描边（3.5px），中文 22/英文 15，粗壮有力。",
-            },
-            "black_white_bold": {
-                "label": "黑字白描强调",
-                "description": "深黑字配白描边（3.0px）+白底阴影，中文 21/英文 14。",
-            },
+            "classic_high_contrast": {
+                "label": "经典高对比",
+                "description": "白字黑边，适应性最强。",
+            }
         },
     }
 
@@ -125,6 +113,8 @@ def ensure_bilingual_ass(temp_dir: Path) -> tuple[int, str]:
         return 1, f"bilingual subtitle mismatch: zh={len(zh_blocks)} en={len(en_blocks)}"
 
     merged = []
+    # 中文在上（大字号），英文在下（小字号）
+    # 使用 ASS 字幕标签：{\fs18} 设置中文大小，{\fs16} 设置英文大小
     for zh_block, en_block in zip(zh_blocks, en_blocks):
         if zh_block["index"] != en_block["index"] or zh_block["timecode"] != en_block["timecode"]:
             return 1, f"bilingual subtitle mismatch at block {zh_block['index']}"
@@ -134,7 +124,7 @@ def ensure_bilingual_ass(temp_dir: Path) -> tuple[int, str]:
             {
                 "index": zh_block["index"],
                 "timecode": zh_block["timecode"],
-                "text": f"{zh_text}\n{en_text}".strip(),
+                "text": f"{{\\fs18}}{zh_text}{{\\fs16}}\n{en_text}".strip(),
             }
         )
 
