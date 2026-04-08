@@ -1,5 +1,7 @@
+import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -67,6 +69,21 @@ def run_checks():
     missing_packages = check_python_packages()
     missing_tools, tool_paths = check_cli_tools(ffmpeg_path)
     chrome_cookie_db = find_chrome_cookie_db()
+
+    print(f"[*] Python Path: {sys.executable}")
+
+    mise = shutil.which("mise")
+    if mise:
+        try:
+            res = subprocess.run(["mise", "where", "python"], capture_output=True, text=True, check=False)
+            if res.returncode == 0:
+                mise_py = res.stdout.strip()
+                if mise_py in sys.executable:
+                    print(f"[*] Mise Sync: Current Python is aligned with mise ({mise_py})")
+                else:
+                    print(f"[!] Mise Sync: Current Python ({sys.executable}) is NOT aligned with mise ({mise_py})")
+        except Exception:
+            pass
 
     print(f"[*] FFmpeg Path: {ffmpeg_path or 'Not Found'}")
     if libass_ok:

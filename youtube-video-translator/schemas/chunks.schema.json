@@ -1,0 +1,94 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "chunks.schema.json",
+  "title": "Chunks",
+  "description": "Chunking output consumed by translate_scheduler. Each chunk maps to one or more source_segments.",
+  "type": "object",
+  "required": ["chunks", "video_id", "chunking_config"],
+  "properties": {
+    "video_id": {
+      "type": "string"
+    },
+    "chunking_config": {
+      "type": "object",
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["time_range", "subtitle_boundary", "time_range_with_subtitle_boundary"],
+          "default": "time_range_with_subtitle_boundary"
+        },
+        "max_chunk_duration": {
+          "type": "number",
+          "description": "Maximum seconds per chunk",
+          "default": 60
+        },
+        "max_tokens": {
+          "type": "integer",
+          "description": "Maximum tokens per chunk (for LLM context limit)",
+          "default": 2000
+        }
+      }
+    },
+    "chunks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["chunk_id", "segment_ids", "start", "end", "text", "status"],
+        "properties": {
+          "chunk_id": {
+            "type": "integer",
+            "description": "1-based chunk index"
+          },
+          "segment_ids": {
+            "type": "array",
+            "description": "Indices into source_segments[].segments[] that this chunk contains",
+            "items": { "type": "integer" }
+          },
+          "start": {
+            "type": "number",
+            "description": "Chunk start time in seconds (float, from first included segment)"
+          },
+          "end": {
+            "type": "number",
+            "description": "Chunk end time in seconds (float, from last included segment)"
+          },
+          "text": {
+            "type": "string",
+            "description": "Concatenated text of all segments in this chunk (original language)"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "in_progress", "completed", "failed"],
+            "default": "pending"
+          },
+          "attempts": {
+            "type": "integer",
+            "description": "Number of translation attempts made",
+            "default": 0
+          },
+          "glossary_terms": {
+            "type": "array",
+            "description": "Optional glossary terms injected at translation time for consistency. Format: [{term: 'AI', translation: '人工智能'}, ...]",
+            "items": {
+              "type": "object",
+              "required": ["term", "translation"],
+              "properties": {
+                "term": { "type": "string" },
+                "translation": { "type": "string" }
+              }
+            },
+            "default": []
+          },
+          "error": {
+            "type": ["string", "null"],
+            "description": "Error message if status=failed"
+          }
+        }
+      }
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

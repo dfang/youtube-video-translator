@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "metadata.schema.json",
+  "title": "Metadata",
+  "description": "Video metadata extracted by yt-dlp. Produced by Phase 3 metadata probe.",
+  "type": "object",
+  "required": ["video_id", "title", "duration", "has_official_caption", "caption_languages"],
+  "additionalProperties": true,
+  "properties": {
+    "video_id": {
+      "type": "string",
+      "description": "YouTube video ID (e.g. dQw4w9WgXcQ)"
+    },
+    "title": {
+      "type": "string",
+      "description": "Video title"
+    },
+    "duration": {
+      "type": "number",
+      "description": "Video duration in seconds"
+    },
+    "has_official_caption": {
+      "type": "boolean",
+      "description": "Whether the video has any official YouTube captions available"
+    },
+    "caption_languages": {
+      "type": "array",
+      "description": "List of available caption language codes (e.g. ['en', 'ja'])",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "uploader": {
+      "type": ["string", "null"],
+      "description": "Channel/uploader name"
+    },
+    "channel": {
+      "type": ["string", "null"],
+      "description": "Channel name (alias for uploader)"
+    },
+    "fulltitle": {
+      "type": ["string", "null"],
+      "description": "Full video title"
+    }
+  }
+}

@@ -45,7 +45,7 @@ Requirements:
 2. Run:
 
 ```bash
-python3 "$HOME/.openclaw/skills/youtube-video-translator/scripts/whisperx_transcriber.py" \
+python3 "[SKILL_ROOT]/scripts/whisperx_transcriber.py" \
   "translations/[VIDEO_ID]/temp/raw_video.mp4" \
   "translations/[VIDEO_ID]/temp"
 ```

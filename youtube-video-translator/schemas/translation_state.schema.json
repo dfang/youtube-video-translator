@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "translation_state.schema.json",
+  "title": "Translation State",
+  "description": "Translation contract and cache metadata. Cache hits require all fields below to match — changing any field invalidates the cache and forces re-translation.",
+  "type": "object",
+  "required": ["video_id", "model_id", "prompt_version", "glossary_hash", "chunking_hash", "source_hash", "validator_version", "provider", "strategy"],
+  "properties": {
+    "video_id": {
+      "type": "string"
+    },
+    "model_id": {
+      "type": "string",
+      "description": "Model policy identifier for translation. Use 'host_default' when the invoking host agent/CLI owns model selection."
+    },
+    "provider": {
+      "type": "string",
+      "description": "Translation provider name (e.g. 'subagent_claude', 'subagent_gemini', 'openai', 'anthropic')"
+    },
+    "runner": {
+      "type": "string",
+      "description": "Execution runner used for delegated translation (e.g. 'claude', 'gemini', 'openclaw', 'custom', 'inline')."
+    },
+    "strategy": {
+      "type": "string",
+      "enum": ["primary_model", "cost_optimized"],
+      "description": "'primary_model' = use the invoking host's current/default model; 'cost_optimized' is reserved for future explicit policies"
+    },
+    "prompt_version": {
+      "type": "string",
+      "description": "Version string for the translation prompt template. Changing this invalidates all chunk translations."
+    },
+    "glossary_hash": {
+      "type": "string",
+      "description": "SHA256 hash of glossary.json content. If glossary changes, this changes and cache is invalidated."
+    },
+    "chunking_hash": {
+      "type": "string",
+      "description": "Hash of source_segments + chunking_config. If source changes or chunking config changes, cache is invalidated."
+    },
+    "source_hash": {
+      "type": "string",
+      "description": "Hash of the source_segments content. Detects if upstream source changed."
+    },
+    "validator_version": {
+      "type": "string",
+      "description": "Version of the validator script. Changing validator invalidates cache to force re-verification."
+    },
+    "chunks_completed": {
+      "type": "integer",
+      "description": "Number of chunks with status=completed",
+      "default": 0
+    },
+    "chunks_total": {
+      "type": "integer",
+      "description": "Total number of chunks",
+      "default": 0
+    },
+    "completed_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "ISO timestamp when all chunks were translated and validated"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -7,6 +7,7 @@ Handles phase ordering, checkpointing, and resumable execution.
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -32,6 +33,38 @@ INTENT_ENUMS = {
 }
 
 STYLE_CONFIG_FILENAME = "subtitle_style.json"
+
+
+def ensure_mise_environment():
+    """Programmatically activate mise for the current process and children."""
+    try:
+        # Check if mise is available
+        if not shutil.which("mise"):
+            return
+
+        # Get mise environment in JSON format
+        result = subprocess.run(
+            ["mise", "env", "--json"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return
+
+        mise_env = json.loads(result.stdout)
+        # Update current environment
+        for key, value in mise_env.items():
+            os.environ[key] = value
+
+        # Update sys.path if necessary? (usually not needed if we use sys.executable)
+        # But we report it to show it worked.
+        if "PATH" in mise_env:
+            os.environ["PATH"] = mise_env["PATH"]
+
+    except Exception:
+        # Silently fail if mise is missing or errors (fallback to system env)
+        pass
 
 
 def get_video_dir(video_id: str) -> Path:
@@ -83,6 +116,21 @@ def run_subprocess(
         return returncode, output
 
 
+def report_step(phase: int, step: str, status: str, msg: str = "") -> None:
+    if status == "RUNNING":
+        print(f"[Phase {phase}/10][STEP][RUNNING] {step}")
+    elif status == "DONE":
+        line = f"[Phase {phase}/10][STEP][DONE] {step}"
+        if msg:
+            line += f" | {msg}"
+        print(line)
+    elif status == "FAILED":
+        line = f"[Phase {phase}/10][STEP][FAILED] {step}"
+        if msg:
+            line += f" | error: {msg}"
+        print(line)
+
+
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -132,6 +180,16 @@ def parse_srt_blocks(path: Path) -> list[dict]:
     return parsed
 
 
+def _seconds_to_srt(secs: float) -> str:
+    """Convert float seconds to SRT timestamp: 00:00:00,000"""
+    secs = max(0, secs)
+    h = int(secs // 3600)
+    m = int((secs % 3600) // 60)
+    s = int(secs % 60)
+    ms = int((secs - int(secs)) * 1000)
+    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
+
+
 def write_srt_blocks(path: Path, blocks: list[dict]) -> None:
     rendered = []
     for block in blocks:
@@ -172,7 +230,7 @@ def ensure_source_subtitles(temp_dir: Path, intent: dict | None = None) -> tuple
         return 1, "raw_video.mp4 not found"
 
     exit_code, output = run_subprocess(
-        ["python3", str(SKILL_ROOT / "scripts/whisperx_transcriber.py"), str(raw_video), str(temp_dir)],
+        [sys.executable, str(SKILL_ROOT / "scripts/whisperx_transcriber.py"), str(raw_video), str(temp_dir)],
         heartbeat_phase=4,
         heartbeat_name=PHASE_NAMES[4],
     )
@@ -201,7 +259,7 @@ def ensure_audited_subtitles(temp_dir: Path) -> tuple[int, str]:
         return 1, "en_original.srt not found"
 
     exit_code, output = run_subprocess(
-        ["python3", str(SKILL_ROOT / "scripts/subtitle_splitter.py"), str(en_original), str(en_audited)]
+        [sys.executable, str(SKILL_ROOT / "scripts/subtitle_splitter.py"), str(en_original), str(en_audited)]
     )
     if exit_code != 0:
         return exit_code, output
@@ -233,6 +291,22 @@ def build_default_subtitle_style_config() -> dict:
             "bold_yellow": {
                 "label": "黄色强调",
                 "description": "黄字深描边，适合教程、解说类内容。",
+            },
+            "black_white_thin": {
+                "label": "黑字白描细",
+                "description": "黑字配白描边（1.5px），中文 18/英文 13，适合浅色背景。",
+            },
+            "black_white_medium": {
+                "label": "黑字白描中",
+                "description": "黑字配白描边（2.5px），中文 20/英文 14，中等醒目。",
+            },
+            "black_white_thick": {
+                "label": "黑字白描粗",
+                "description": "黑字配白描边（3.5px），中文 22/英文 15，粗壮有力。",
+            },
+            "black_white_bold": {
+                "label": "黑字白描强调",
+                "description": "深黑字配白描边（3.0px）+白底阴影，中文 21/英文 14。",
             },
         },
     }
@@ -270,7 +344,7 @@ def ensure_chinese_ass(temp_dir: Path) -> tuple[int, str]:
 
     exit_code, output = run_subprocess(
         [
-            "python3",
+            sys.executable,
             str(SKILL_ROOT / "scripts/srt_to_ass.py"),
             str(zh_translated),
             str(zh_only_ass),
@@ -324,7 +398,7 @@ def ensure_bilingual_ass(temp_dir: Path) -> tuple[int, str]:
     write_srt_blocks(bilingual_srt, merged)
     exit_code, output = run_subprocess(
         [
-            "python3",
+            sys.executable,
             str(SKILL_ROOT / "scripts/srt_to_ass.py"),
             str(bilingual_srt),
             str(bilingual_ass),
@@ -520,7 +594,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
 
     if phase == 0:
         exit_code, output = run_subprocess(
-            ["python3", str(SKILL_ROOT / "scripts/env_check.py")],
+            [sys.executable, str(SKILL_ROOT / "scripts/env_check.py")],
             heartbeat_phase=0,
             heartbeat_name=PHASE_NAMES[0],
         )
@@ -558,89 +632,217 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
         if not url:
             return "failed", "url.txt is empty"
 
-        raw_video = temp / "raw_video.mp4"
-        if raw_video.exists():
-            return "done", str(raw_video)
-
+        # Step 3a: metadata probe
+        report_step(3, "metadata_probe", "RUNNING")
         exit_code, output = run_subprocess(
-            ["python3", str(SKILL_ROOT / "scripts/downloader.py"), url, str(temp)],
+            [sys.executable, str(SKILL_ROOT / "scripts/phase_3_metadata_probe.py"), url, str(temp)],
             heartbeat_phase=3,
             heartbeat_name=PHASE_NAMES[3],
         )
-        if exit_code == 0 and raw_video.exists():
-            return "done", str(raw_video)
-        return "failed", output
+        if exit_code != 0:
+            report_step(3, "metadata_probe", "FAILED", output)
+            return "failed", f"phase_3_metadata_probe failed: {output}"
+        if not (temp / "metadata.json").exists():
+            report_step(3, "metadata_probe", "FAILED", "metadata.json not produced")
+            return "failed", "metadata.json not produced"
+        report_step(3, "metadata_probe", "DONE", "output: temp/metadata.json")
 
-    if phase == 4:
-        if not (temp / "en_audited.srt").exists():
-            exit_code, message = ensure_source_subtitles(temp, intent)
-            if exit_code != 0:
-                return "failed", message
-
-            exit_code, message = ensure_audited_subtitles(temp)
-            if exit_code != 0:
-                return "failed", message
-        else:
-            exit_code, message = ensure_audited_subtitles(temp)
-            if exit_code != 0:
-                return "failed", message
-
-        srt = temp / "en_audited.srt"
-        p4_state = temp / "phase4_state.json"
-        zh_translated = temp / "zh_translated.srt"
-
-        if not p4_state.exists():
-            exit_code, output = run_subprocess(
-                ["python3", str(SKILL_ROOT / "scripts/phase4_runner.py"), "start", str(srt), str(temp)],
-                heartbeat_phase=4,
-                heartbeat_name=PHASE_NAMES[4],
-            )
-            if exit_code != 0:
-                return "failed", output
-
+        # Step 3b: caption discovery (reads metadata, writes caption_plan.json)
+        subtitle_mode = (intent or {}).get("subtitle_mode", "auto")
+        report_step(3, "caption_discovery", "RUNNING")
         exit_code, output = run_subprocess(
-            ["python3", str(SKILL_ROOT / "scripts/phase4_runner.py"), "status", str(temp), "--json"]
+            [sys.executable, str(SKILL_ROOT / "scripts/phase_3_caption_discovery.py"), str(temp), subtitle_mode],
         )
         if exit_code != 0:
-            return "failed", output
+            report_step(3, "caption_discovery", "FAILED", output)
+            return "failed", f"phase_3_caption_discovery failed: {output}"
+        if not (temp / "caption_plan.json").exists():
+            report_step(3, "caption_discovery", "FAILED", "caption_plan.json not produced")
+            return "failed", "caption_plan.json not produced"
+        report_step(3, "caption_discovery", "DONE", "output: temp/caption_plan.json")
 
+        # Step 3c: video download
+        report_step(3, "video_download", "RUNNING")
+        exit_code, output = run_subprocess(
+            [sys.executable, str(SKILL_ROOT / "scripts/phase_3_video_download.py"), url, str(temp)],
+            heartbeat_phase=3,
+            heartbeat_name=PHASE_NAMES[3],
+        )
+        if exit_code != 0:
+            report_step(3, "video_download", "FAILED", output)
+            return "failed", f"phase_3_video_download failed: {output}"
+        raw_video = temp / "raw_video.mp4"
+        if not raw_video.exists():
+            report_step(3, "video_download", "FAILED", "raw_video.mp4 not produced")
+            return "failed", "raw_video.mp4 not produced"
+        report_step(3, "video_download", "DONE", "output: temp/raw_video.mp4")
+        return "done", str(raw_video)
+
+    if phase == 4:
+        # Read caption_plan to determine path
+        plan_file = temp / "caption_plan.json"
+        if not plan_file.exists():
+            return "failed", "caption_plan.json not found — run phase 3 first"
         try:
-            status_data = json.loads(output)
+            caption_plan = json.loads(plan_file.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
-            return "failed", f"phase4 status returned invalid JSON: {output}"
+            return "failed", "caption_plan.json is invalid JSON"
+        caption_source = caption_plan.get("source", "asr")
 
-        verified = status_data.get("counts", {}).get("verified", 0)
-        total = status_data.get("total_batches", 0)
-        if verified != total or total == 0:
-            return "waiting", "interactive: phase4_batch_translation_required"
-
-        if not zh_translated.exists():
+        # Step 4a: caption fetch (official) or ASR
+        if caption_source == "official":
+            # Official caption path
+            url_file = temp / "url.txt"
+            url = url_file.read_text(encoding="utf-8").strip() if url_file.exists() else ""
+            if not url:
+                return "failed", "url.txt not found for caption fetch"
+            report_step(4, "caption_fetch", "RUNNING")
             exit_code, output = run_subprocess(
-                ["python3", str(SKILL_ROOT / "scripts/phase4_runner.py"), "finalize", str(temp)],
+                [sys.executable, str(SKILL_ROOT / "scripts/phase_4_caption_fetch.py"), url, str(temp)],
                 heartbeat_phase=4,
                 heartbeat_name=PHASE_NAMES[4],
             )
             if exit_code != 0:
-                return "failed", output
+                report_step(4, "caption_fetch", "FAILED", output)
+                return "failed", f"phase_4_caption_fetch failed: {output}"
+            report_step(4, "caption_fetch", "DONE", "output: temp/source_segments.json")
+        else:
+            # ASR path: audio extract + ASR + normalize
+            video_file = temp / "raw_video.mp4"
+            if not video_file.exists():
+                return "failed", "raw_video.mp4 not found — run phase 3 first"
+            source_audio = temp / "source_audio.wav"
+            if (SKILL_ROOT / "scripts/phase_4_audio_extract.py").exists():
+                report_step(4, "audio_extract", "RUNNING")
+                exit_code, output = run_subprocess(
+                    [sys.executable, str(SKILL_ROOT / "scripts/phase_4_audio_extract.py"), str(video_file), str(temp)],
+                    heartbeat_phase=4,
+                    heartbeat_name=PHASE_NAMES[4],
+                )
+                if exit_code != 0:
+                    report_step(4, "audio_extract", "FAILED", output)
+                    return "failed", f"phase_4_audio_extract failed: {output}"
+                report_step(4, "audio_extract", "DONE", "output: temp/source_audio.wav")
 
-        exit_code, message = ensure_subtitle_overlay(temp, intent)
+            report_step(4, "asr", "RUNNING")
+            exit_code, output = run_subprocess(
+                [sys.executable, str(SKILL_ROOT / "scripts/phase_4_asr.py"), str(source_audio if source_audio.exists() else video_file), str(temp)],
+                heartbeat_phase=4,
+                heartbeat_name=PHASE_NAMES[4],
+            )
+            if exit_code != 0:
+                report_step(4, "asr", "FAILED", output)
+                return "failed", f"phase_4_asr failed: {output}"
+            report_step(4, "asr", "DONE", "output: temp/asr_segments.json")
+
+            report_step(4, "asr_normalize", "RUNNING")
+            exit_code, output = run_subprocess(
+                [sys.executable, str(SKILL_ROOT / "scripts/phase_4_asr_normalize.py"), str(temp)],
+            )
+            if exit_code != 0:
+                report_step(4, "asr_normalize", "FAILED", output)
+                return "failed", f"phase_4_asr_normalize failed: {output}"
+            report_step(4, "asr_normalize", "DONE", "output: temp/source_segments.json")
+
+        # Step 4b: chunk build
+        if not (temp / "chunks.json").exists():
+            report_step(4, "chunk_build", "RUNNING")
+            exit_code, output = run_subprocess(
+                [sys.executable, str(SKILL_ROOT / "scripts/phase_4_chunk_build.py"), str(temp)],
+                heartbeat_phase=4,
+                heartbeat_name=PHASE_NAMES[4],
+            )
+            if exit_code != 0:
+                report_step(4, "chunk_build", "FAILED", output)
+                return "failed", f"phase_4_chunk_build failed: {output}"
+            report_step(4, "chunk_build", "DONE", "output: temp/chunks.json")
+
+        # Step 4c: translate scheduler (parallel chunk translation)
+        vid = video_id
+        if not vid:
+            mfile = temp / "metadata.json"
+            vid = json.loads(mfile.read_text()).get("video_id", "unknown") if mfile.exists() else "unknown"
+        report_step(4, "translate_scheduler", "RUNNING")
+        exit_code, output = run_subprocess(
+            [sys.executable, str(SKILL_ROOT / "scripts/phase_4_translate_scheduler.py"),
+             "--video-id", str(vid), "--temp-dir", str(temp)],
+            heartbeat_phase=4,
+            heartbeat_name=PHASE_NAMES[4],
+        )
         if exit_code != 0:
-            return "failed", message
-        return "done", message
+            report_step(4, "translate_scheduler", "FAILED", output)
+            return "failed", f"phase_4_translate_scheduler failed: {output}"
+        report_step(4, "translate_scheduler", "DONE", "output: temp/chunks.json")
+
+        # Step 4d: validate
+        report_step(4, "validator", "RUNNING")
+        exit_code, output = run_subprocess(
+            [sys.executable, str(SKILL_ROOT / "scripts/phase_4_validator.py"), str(temp)],
+        )
+        if exit_code != 0:
+            report_step(4, "validator", "FAILED", output)
+            return "failed", f"phase_4_validator failed: {output}"
+        report_step(4, "validator", "DONE")
+
+        # Step 4e: align
+        layout = (intent or {}).get("subtitle_layout", "bilingual")
+        report_step(4, "align", "RUNNING")
+        exit_code, output = run_subprocess(
+            [sys.executable, str(SKILL_ROOT / "scripts/phase_4_align.py"), str(temp), layout],
+        )
+        if exit_code != 0:
+            report_step(4, "align", "FAILED", output)
+            return "failed", f"phase_4_align failed: {output}"
+        report_step(4, "align", "DONE", "output: temp/subtitle_manifest.json")
+
+        # Step 4f: export
+        report_step(4, "export", "RUNNING")
+        exit_code, output = run_subprocess(
+            [sys.executable, str(SKILL_ROOT / "scripts/phase_4_export.py"), str(temp), layout],
+        )
+        if exit_code != 0:
+            report_step(4, "export", "FAILED", output)
+            return "failed", f"phase_4_export failed: {output}"
+
+        # Canonical output: subtitle_manifest.json + bilingual.ass / zh_only.ass
+        layout_key = "bilingual" if layout == "bilingual" else "zh_only"
+        canonical_ass = temp / f"{layout_key}.ass"
+        if not canonical_ass.exists():
+            report_step(4, "export", "FAILED", f"canonical subtitle {canonical_ass} not produced")
+            return "failed", f"canonical subtitle {canonical_ass} not produced"
+        # Also copy to subtitle_overlay.ass for Phase 7 compatibility
+        overlay = temp / "subtitle_overlay.ass"
+        overlay.write_bytes(canonical_ass.read_bytes())
+        report_step(4, "export", "DONE", f"output: temp/{layout_key}.ass")
+        return "done", str(canonical_ass)
 
     if phase == 5:
         if intent and intent.get("audio_mode") == "original":
             return "done", "skipped: original audio"
 
-        srt = temp / "zh_translated.srt"
+        # New architecture: TTS consumes subtitle_manifest.json
+        manifest_file = temp / "subtitle_manifest.json"
+        if not manifest_file.exists():
+            return "failed", "subtitle_manifest.json not found — run phase 4 first"
+
+        # Generate zh_translated.srt from manifest for voiceover_tts compatibility
+        srt_file = temp / "zh_translated.srt"
+        if not srt_file.exists():
+            manifest_data = json.loads(manifest_file.read_text(encoding="utf-8"))
+            lines = []
+            for i, seg in enumerate(manifest_data.get("segments", []), start=1):
+                start_ts = _seconds_to_srt(seg.get("start", 0))
+                end_ts = _seconds_to_srt(seg.get("end", 0))
+                text = seg.get("translated_text", "").replace("\n", "\\N")
+                lines.append(f"{i}\n{start_ts} --> {end_ts}\n{text}")
+            srt_file.write_text("\n\n".join(lines) + "\n", encoding="utf-8")
+
         output = temp / "zh_voiceover.mp3"
-        if not srt.exists():
-            return "failed", "zh_translated.srt not found"
         if output.exists():
             return "done", str(output)
 
         exit_code, logs = run_subprocess(
-            ["python3", str(SKILL_ROOT / "scripts/voiceover_tts.py"), str(srt), str(output)],
+            [sys.executable, str(SKILL_ROOT / "scripts/voiceover_tts.py"), str(srt_file), str(output)],
             heartbeat_phase=5,
             heartbeat_name=PHASE_NAMES[5],
         )
@@ -678,7 +880,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
 
         exit_code, output = run_subprocess(
             [
-                "python3",
+                sys.executable,
                 str(SKILL_ROOT / "scripts/cover_generator.py"),
                 str(bg_path),
                 str(cover),
@@ -709,7 +911,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
 
         audio_arg = str(voiceover) if voiceover.exists() else ""
         cmd = [
-            "python3", str(SKILL_ROOT / "scripts/video_muxer.py"),
+            sys.executable, str(SKILL_ROOT / "scripts/video_muxer.py"),
             str(video), audio_arg, str(ass), str(final),
         ]
         if not voiceover.exists():
@@ -752,8 +954,32 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
     if phase == 9:
         if intent and not intent.get("publish"):
             return "done", "skipped: publishing not requested"
-        if final.joinpath("publish_result.json").exists():
-            return "done", str(final / "publish_result.json")
+
+        final_video = final / "final_video.mp4"
+        if not final_video.exists():
+            return "failed", "final_video.mp4 not found — run phase 7 first"
+
+        # Check publish mode via publish_result.json or prompt
+        publish_result = final / "publish_result.json"
+        publish_mode = "draft"  # default
+        if publish_result.exists():
+            try:
+                pr_data = json.loads(publish_result.read_text(encoding="utf-8"))
+                publish_mode = pr_data.get("mode", "draft")
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        if not publish_result.exists():
+            return "waiting", f"interactive: choose publish mode (draft or formal), then write mode to final/publish_result.json"
+
+        # draft path: upload to filebin only
+        if publish_mode == "draft":
+            preview_file = final / "preview.txt"
+            if preview_file.exists() and target_is_fresh(preview_file, [final_video]):
+                return "done", str(preview_file)
+            return "done", "skipped: draft mode — preview already available"
+
+        # formal path: full Bilibili publish via agent_browser
         return "waiting", "interactive: agent_browser_delegation_required"
 
     if phase == 10:
@@ -764,7 +990,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
             return "done", "nothing to clean"
 
         exit_code, output = run_subprocess(
-            ["python3", str(SKILL_ROOT / "scripts/cleaner.py"), str(temp)],
+            [sys.executable, str(SKILL_ROOT / "scripts/cleaner.py"), str(temp)],
             heartbeat_phase=10,
             heartbeat_name=PHASE_NAMES[10],
         )
@@ -887,6 +1113,7 @@ def load_intent(video_id: str) -> dict:
 
 
 def main():
+    ensure_mise_environment()
     if len(sys.argv) < 3:
         print("Usage:")
         print("  phase_runner.py run --video-id [ID]           # Run all pending phases")

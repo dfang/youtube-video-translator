@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "source_segments.schema.json",
+  "title": "Source Segments",
+  "description": "Normalized subtitle segments used as the single source of truth before chunking. Both official-caption and ASR paths must write to this contract. Time轴不可丢失 — start/end are mandatory and must be preserved by all downstream modules.",
+  "type": "object",
+  "required": ["segments", "source", "video_id"],
+  "properties": {
+    "video_id": {
+      "type": "string"
+    },
+    "source": {
+      "type": "string",
+      "enum": ["official", "asr"]
+    },
+    "language": {
+      "type": "string",
+      "default": "en"
+    },
+    "segments": {
+      "type": "array",
+      "description": "List of subtitle segments. Each segment MUST contain start, end, and text — these fields must not be dropped by any processing step.",
+      "items": {
+        "type": "object",
+        "required": ["start", "end", "text"],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "description": "1-based subtitle block index"
+          },
+          "start": {
+            "type": "number",
+            "description": "Start time in seconds (float). Must be preserved exactly — do not round or drop."
+          },
+          "end": {
+            "type": "number",
+            "description": "End time in seconds (float). Must be preserved exactly — do not round or drop."
+          },
+          "text": {
+            "type": "string",
+            "description": "Raw subtitle text (original language)"
+          },
+          "words": {
+            "type": "array",
+            "description": "Optional word-level timestamps preserved from ASR. Downstream splitters may use these to refine subtitle timing.",
+            "items": {
+              "type": "object",
+              "required": ["text"],
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": ["number", "null"]
+                },
+                "end": {
+                  "type": ["number", "null"]
+                },
+                "score": {
+                  "type": ["number", "null"]
+                }
+              }
+            }
+          },
+          "speaker": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

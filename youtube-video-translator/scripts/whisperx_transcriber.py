@@ -1,6 +1,7 @@
 import os
 import sys
 import subprocess
+import json
 from utils import get_ffmpeg_path
 
 # 尝试导入 state_manager 以支持状态更新
@@ -12,6 +13,65 @@ except ImportError:
 
 # 优先使用具有完整能力的 ffmpeg
 FFMPEG = get_ffmpeg_path()
+
+
+def _safe_float(value):
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def build_word_timing_sidecar_payload(whisperx_json_path, srt_path):
+    if not os.path.exists(whisperx_json_path):
+        return None
+
+    try:
+        with open(whisperx_json_path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+    except Exception as e:
+        print(f"读取 WhisperX JSON 失败，跳过词级时间戳 sidecar: {e}")
+        return None
+
+    segments = []
+    for idx, seg in enumerate(payload.get("segments", []), start=1):
+        text = (seg.get("text") or "").strip()
+        start = _safe_float(seg.get("start"))
+        end = _safe_float(seg.get("end"))
+        if not text or start is None or end is None:
+            continue
+
+        words = []
+        for word in seg.get("words", []) or []:
+            token = (word.get("word") or word.get("text") or "").strip()
+            if not token:
+                continue
+            words.append({
+                "text": token,
+                "start": _safe_float(word.get("start")),
+                "end": _safe_float(word.get("end")),
+                "score": _safe_float(word.get("score")),
+            })
+
+        item = {
+            "index": idx,
+            "start": start,
+            "end": end,
+            "text": text,
+            "words": words,
+        }
+        speaker = seg.get("speaker")
+        if speaker:
+            item["speaker"] = speaker
+        segments.append(item)
+
+    return {
+        "source_srt": os.path.abspath(srt_path),
+        "language": payload.get("language", "en"),
+        "segments": segments,
+    }
 
 def _get_initial_prompt():
     """
@@ -100,19 +160,19 @@ def transcribe_with_whisperx(video_path, output_dir):
     ], check=True)
 
     # 运行 WhisperX 转录
-    # 默认模型 large-v3, 自动检测语言 (英), MPS 加速
+    # 默认模型 medium, 自动检测语言 (英), MPS 加速
     # initial_prompt 注入 ICU 术语词典，提升医疗术语识别率
     initial_prompt = _get_initial_prompt()
-    print("正在使用 WhisperX 转录音频 ( large-v3 )...")
+    print("正在使用 WhisperX 转录音频 ( medium )...")
 
     try:
         subprocess.run([
             "whisperx", audio_path,
-            "--model", "large-v3",
+            "--model", "medium",
             "--language", "en",
             "--initial_prompt", initial_prompt,
             "--output_dir", output_dir,
-            "--output_format", "srt",
+            "--output_format", "all",
             "--compute_type", "int8"
         ], check=True)
     except subprocess.CalledProcessError as e:
@@ -123,9 +183,18 @@ def transcribe_with_whisperx(video_path, output_dir):
     # 重命名生成的字幕为 en_original.srt
     # WhisperX 会生成 original_audio.srt
     generated_srt = os.path.join(output_dir, "original_audio.srt")
+    generated_json = os.path.join(output_dir, "original_audio.json")
     final_srt = os.path.join(output_dir, "en_original.srt")
+    final_sidecar = os.path.join(output_dir, "en_original.word_timestamps.json")
     if os.path.exists(generated_srt):
         os.rename(generated_srt, final_srt)
+        sidecar_payload = build_word_timing_sidecar_payload(generated_json, final_srt)
+        if sidecar_payload:
+            with open(final_sidecar, "w", encoding="utf-8") as f:
+                json.dump(sidecar_payload, f, ensure_ascii=False, indent=2)
+            print(f"词级时间戳 sidecar 已生成: {final_sidecar}")
+        elif os.path.exists(final_sidecar):
+            os.remove(final_sidecar)
         print(f"转录完成: {final_srt}")
         if update_phase and video_id:
             update_phase(video_id, 4, "done", artifact=final_srt)

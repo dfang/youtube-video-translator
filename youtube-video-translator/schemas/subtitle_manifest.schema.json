@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "subtitle_manifest.schema.json",
+  "title": "Subtitle Manifest",
+  "description": "Canonical subtitle output from the align step. This is the single source of truth consumed by Phase 7 (video muxer). Time轴不可丢失 — start/end are mandatory.",
+  "type": "object",
+  "required": ["segments", "video_id", "layout"],
+  "properties": {
+    "video_id": {
+      "type": "string"
+    },
+    "layout": {
+      "type": "string",
+      "enum": ["bilingual", "chinese_only"],
+      "description": "Subtitle layout: bilingual (source + translated) or chinese_only (translated only)"
+    },
+    "segments": {
+      "type": "array",
+      "description": "Each segment must have start, end, source_text, and translated_text. Time轴不可丢失 — start/end must match source_segments exactly.",
+      "items": {
+        "type": "object",
+        "required": ["start", "end", "source_text", "translated_text", "segment_id"],
+        "properties": {
+          "segment_id": {
+            "type": "integer",
+            "description": "Index into source_segments[].segments[]"
+          },
+          "start": {
+            "type": "number",
+            "description": "Start time in seconds (float). Must match source_segments exactly — no rounding."
+          },
+          "end": {
+            "type": "number",
+            "description": "End time in seconds (float). Must match source_segments exactly — no rounding."
+          },
+          "source_text": {
+            "type": "string",
+            "description": "Original subtitle text (from source_segments)"
+          },
+          "translated_text": {
+            "type": "string",
+            "description": "Translated subtitle text (Chinese)"
+          }
+        }
+      }
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

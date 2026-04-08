@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "asr_segments.schema.json",
+  "title": "ASR Segments",
+  "description": "Raw output from WhisperX transcription. Intermediate artifact only — not consumed directly by chunking. time轴不可丢失: start/end are mandatory.",
+  "type": "object",
+  "required": ["segments", "video_id", "model"],
+  "properties": {
+    "video_id": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string",
+      "description": "Whisper model used (e.g. 'base', 'large-v3')"
+    },
+    "language": {
+      "type": "string",
+      "default": "en"
+    },
+    "segments": {
+      "type": "array",
+      "description": "Each segment MUST have start, end, and text — these fields are mandatory and must not be discarded by any subsequent step.",
+      "items": {
+        "type": "object",
+        "required": ["start", "end", "text"],
+        "properties": {
+          "start": {
+            "type": "number",
+            "description": "Start time in seconds (float)"
+          },
+          "end": {
+            "type": "number",
+            "description": "End time in seconds (float)"
+          },
+          "text": {
+            "type": "string"
+          },
+          "words": {
+            "type": "array",
+            "description": "Optional word-level timestamps from WhisperX alignment.",
+            "items": {
+              "type": "object",
+              "required": ["text"],
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "start": {
+                  "type": ["number", "null"]
+                },
+                "end": {
+                  "type": ["number", "null"]
+                },
+                "score": {
+                  "type": ["number", "null"]
+                }
+              }
+            }
+          },
+          "speaker": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

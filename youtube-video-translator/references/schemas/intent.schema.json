@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "intent.schema.json",
+  "title": "YouTube Translator Intent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "audio_mode",
+    "subtitle_mode",
+    "subtitle_layout",
+    "publish",
+    "cleanup",
+    "confirmed"
+  ],
+  "properties": {
+    "audio_mode": {
+      "type": "string",
+      "enum": ["original", "voiceover"]
+    },
+    "subtitle_mode": {
+      "type": "string",
+      "enum": ["auto", "official_only", "transcribe"]
+    },
+    "subtitle_layout": {
+      "type": "string",
+      "enum": ["bilingual", "chinese_only"]
+    },
+    "publish": {
+      "type": "boolean"
+    },
+    "cleanup": {
+      "type": "boolean"
+    },
+    "confirmed": {
+      "type": "boolean",
+      "const": true
+    }
+  }
+}
