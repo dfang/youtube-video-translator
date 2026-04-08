@@ -13,21 +13,29 @@ def load_style_config(style_config_path=None):
         # 现在的逻辑是：phase_7_video_muxer.py 会保证生成完整的 style.json
         return payload
 
-    # 后备兜底配置
-    return {
-        "font_name": "PingFang SC Semibold",
-        "font_size": 18,
-        "english_font_size": 14,
-        "text_color": "#FFFFFF",
-        "outline_color": "#000000",
-        "border_style": 1,
-        "back_color": "#000000",
-        "back_alpha": 255,
-        "outline": 2.2,
-        "shadow": 0,
-        "margin_v": 18,
-        "bold": False,
-    }
+def hex_to_color(hex_value, alpha=0):
+    value = hex_value.lstrip("#")
+    if len(value) != 6:
+        raise ValueError(f"invalid color value: {hex_value}")
+    return pysubs2.Color(int(value[0:2], 16), int(value[2:4], 16), int(value[4:6], 16), a=int(alpha))
+
+def apply_default_style(subs, resolved_style):
+    style = pysubs2.SSAStyle()
+    style.fontname = resolved_style.get("font_name", "PingFang SC Semibold")
+    style.fontsize = resolved_style.get("font_size", 18)
+    style.primarycolor = hex_to_color(resolved_style.get("text_color", "#FFFFFF"))
+    style.outlinecolor = hex_to_color(resolved_style.get("outline_color", "#000000"))
+    style.borderstyle = int(resolved_style.get("border_style", 1))
+    style.backcolor = hex_to_color(
+        resolved_style.get("back_color", "#000000"),
+        alpha=resolved_style.get("back_alpha", 255),
+    )
+    style.outline = float(resolved_style.get("outline", 2.2))
+    style.shadow = float(resolved_style.get("shadow", 0))
+    style.bold = bool(resolved_style.get("bold", False))
+    style.alignment = pysubs2.Alignment.BOTTOM_CENTER
+    style.marginv = int(resolved_style.get("margin_v", 18))
+    subs.styles["Default"] = style
 
 
 def convert_srt_to_ass(srt_path, ass_path, style_config_path=None):
