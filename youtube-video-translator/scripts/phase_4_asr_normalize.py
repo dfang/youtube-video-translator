@@ -87,6 +87,9 @@ def split_segment_by_words(seg: dict) -> list[dict]:
             sub_text_parts = []
             sentence_buffer = ""
 
+        # Add space separator between words
+        if sub_text_parts:
+            sub_text_parts.append(" ")
         sub_text_parts.append(text_to_append)
         sub_end = w_end
         sentence_buffer = "".join(sub_text_parts)
