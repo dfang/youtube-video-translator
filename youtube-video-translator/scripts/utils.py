@@ -68,7 +68,14 @@ def check_libass_support(ffmpeg_path):
         return False
 
 def get_video_dir(video_id: str) -> Path:
-    return Path(f"./translations/{video_id}")
+    # 优先使用环境变量 TRANS_ROOT，如果没有设置，则默认使用 ~/Videos/translations
+    root = os.environ.get("TRANS_ROOT")
+    if root:
+        return Path(root) / "translations" / video_id
+
+    # 默认路径：~/Videos/translations
+    default_root = Path.home() / "Videos" / "translations"
+    return default_root / video_id
 
 def get_temp_dir(video_id: str) -> Path:
     return get_video_dir(video_id) / "temp"
