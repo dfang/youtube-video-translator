@@ -49,6 +49,10 @@ INTENT_ENUMS = {
 STYLE_CONFIG_FILENAME = "subtitle_style.json"
 
 
+def get_subtitle_style_path(temp_dir: Path) -> Path:
+    return temp_dir / STYLE_CONFIG_FILENAME
+
+
 def ensure_mise_environment():
     """Programmatically activate mise for the current process and children."""
     try:
@@ -281,142 +285,23 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
         return "done", str(raw_video)
 
     if phase == 4:
-        # Read caption_plan to determine path
-        plan_file = temp / "caption_plan.json"
-        if not plan_file.exists():
-            return "failed", "caption_plan.json not found — run phase 3 first"
-        try:
-            caption_plan = json.loads(plan_file.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            return "failed", "caption_plan.json is invalid JSON"
-        caption_source = caption_plan.get("source", "asr")
-
-        # Step 4a: caption fetch (official) or ASR
-        if caption_source == "official":
-            # Official caption path
-            url_file = temp / "url.txt"
-            url = url_file.read_text(encoding="utf-8").strip() if url_file.exists() else ""
-            if not url:
-                return "failed", "url.txt not found for caption fetch"
-            report_step(4, "caption_fetch", "RUNNING")
-            exit_code, output = run_subprocess(
-                [sys.executable, str(SKILL_ROOT / "scripts/phase_4_caption_fetch.py"), url, str(temp)],
-                heartbeat_phase=4,
-                heartbeat_name=PHASE_NAMES[4],
-            )
-            if exit_code != 0:
-                report_step(4, "caption_fetch", "FAILED", output)
-                return "failed", f"phase_4_caption_fetch failed: {output}"
-            report_step(4, "caption_fetch", "DONE", "output: temp/source_segments.json")
-        else:
-            # ASR path: audio extract + ASR + normalize
-            video_file = temp / "raw_video.mp4"
-            if not video_file.exists():
-                return "failed", "raw_video.mp4 not found — run phase 3 first"
-            source_audio = temp / "source_audio.wav"
-            if (SKILL_ROOT / "scripts/phase_4_audio_extract.py").exists():
-                report_step(4, "audio_extract", "RUNNING")
-                exit_code, output = run_subprocess(
-                    [sys.executable, str(SKILL_ROOT / "scripts/phase_4_audio_extract.py"), str(video_file), str(temp)],
-                    heartbeat_phase=4,
-                    heartbeat_name=PHASE_NAMES[4],
-                )
-                if exit_code != 0:
-                    report_step(4, "audio_extract", "FAILED", output)
-                    return "failed", f"phase_4_audio_extract failed: {output}"
-                report_step(4, "audio_extract", "DONE", "output: temp/source_audio.wav")
-
-            report_step(4, "asr", "RUNNING")
-            exit_code, output = run_subprocess(
-                [sys.executable, str(SKILL_ROOT / "scripts/phase_4_asr.py"), str(source_audio if source_audio.exists() else video_file), str(temp)],
-                heartbeat_phase=4,
-                heartbeat_name=PHASE_NAMES[4],
-            )
-            if exit_code != 0:
-                report_step(4, "asr", "FAILED", output)
-                return "failed", f"phase_4_asr failed: {output}"
-            report_step(4, "asr", "DONE", "output: temp/asr_segments.json")
-
-            report_step(4, "asr_normalize", "RUNNING")
-            exit_code, output = run_subprocess(
-                [sys.executable, str(SKILL_ROOT / "scripts/phase_4_asr_normalize.py"), str(temp)],
-            )
-            if exit_code != 0:
-                report_step(4, "asr_normalize", "FAILED", output)
-                return "failed", f"phase_4_asr_normalize failed: {output}"
-            report_step(4, "asr_normalize", "DONE", "output: temp/source_segments.json")
-
-        # Step 4b: chunk build
-        if not (temp / "chunks.json").exists():
-            report_step(4, "chunk_build", "RUNNING")
-            exit_code, output = run_subprocess(
-                [sys.executable, str(SKILL_ROOT / "scripts/phase_4_chunk_build.py"), str(temp)],
-                heartbeat_phase=4,
-                heartbeat_name=PHASE_NAMES[4],
-            )
-            if exit_code != 0:
-                report_step(4, "chunk_build", "FAILED", output)
-                return "failed", f"phase_4_chunk_build failed: {output}"
-            report_step(4, "chunk_build", "DONE", "output: temp/chunks.json")
-
-        # Step 4c: translate scheduler (parallel chunk translation)
-        vid = video_id
-        if not vid:
-            mfile = temp / "metadata.json"
-            vid = json.loads(mfile.read_text()).get("video_id", "unknown") if mfile.exists() else "unknown"
-        report_step(4, "translate_scheduler", "RUNNING")
-        exit_code, output = run_subprocess(
-            [sys.executable, str(SKILL_ROOT / "scripts/phase_4_translate_scheduler.py"),
-             "--video-id", str(vid), "--temp-dir", str(temp)],
-            heartbeat_phase=4,
-            heartbeat_name=PHASE_NAMES[4],
-        )
-        if exit_code != 0:
-            report_step(4, "translate_scheduler", "FAILED", output)
-            return "failed", f"phase_4_translate_scheduler failed: {output}"
-        report_step(4, "translate_scheduler", "DONE", "output: temp/chunks.json")
-
-        # Step 4d: validate
-        report_step(4, "validator", "RUNNING")
-        exit_code, output = run_subprocess(
-            [sys.executable, str(SKILL_ROOT / "scripts/phase_4_validator.py"), str(temp)],
-        )
-        if exit_code != 0:
-            report_step(4, "validator", "FAILED", output)
-            return "failed", f"phase_4_validator failed: {output}"
-        report_step(4, "validator", "DONE")
-
-        # Step 4e: align
         layout = (intent or {}).get("subtitle_layout", "bilingual")
-        report_step(4, "align", "RUNNING")
+        
         exit_code, output = run_subprocess(
-            [sys.executable, str(SKILL_ROOT / "scripts/phase_4_align.py"), str(temp), layout],
+            [
+                sys.executable, str(SKILL_ROOT / "scripts/phase_4_pipeline.py"),
+                "--video-id", video_id,
+                "--temp-dir", str(temp),
+                "--layout", layout
+            ],
+            heartbeat_phase=4,
+            heartbeat_name=PHASE_NAMES[4]
         )
-        if exit_code != 0:
-            report_step(4, "align", "FAILED", output)
-            return "failed", f"phase_4_align failed: {output}"
-        report_step(4, "align", "DONE", "output: temp/subtitle_manifest.json")
-
-        # Step 4f: export
-        report_step(4, "export", "RUNNING")
-        exit_code, output = run_subprocess(
-            [sys.executable, str(SKILL_ROOT / "scripts/phase_4_export.py"), str(temp), layout],
-        )
-        if exit_code != 0:
-            report_step(4, "export", "FAILED", output)
-            return "failed", f"phase_4_export failed: {output}"
-
-        # Canonical output: subtitle_manifest.json + bilingual.ass / zh_only.ass
-        layout_key = "bilingual" if layout == "bilingual" else "zh_only"
-        canonical_ass = temp / f"{layout_key}.ass"
-        if not canonical_ass.exists():
-            report_step(4, "export", "FAILED", f"canonical subtitle {canonical_ass} not produced")
-            return "failed", f"canonical subtitle {canonical_ass} not produced"
-        # Also copy to subtitle_overlay.ass for Phase 7 compatibility
-        overlay = temp / "subtitle_overlay.ass"
-        overlay.write_bytes(canonical_ass.read_bytes())
-        report_step(4, "export", "DONE", f"output: temp/{layout_key}.ass")
-        return "done", str(canonical_ass)
+        if exit_code == 0:
+            layout_key = "bilingual" if layout == "bilingual" else "zh_only"
+            canonical_ass = temp / f"{layout_key}.ass"
+            return "done", str(canonical_ass)
+        return "failed", output
 
     if phase == 5:
         if intent and intent.get("audio_mode") == "original":
