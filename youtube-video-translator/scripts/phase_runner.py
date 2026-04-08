@@ -23,7 +23,21 @@ SKILL_ROOT = _dev_root
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 
 from state_manager import get_state_path, load_state, update_phase, is_phase_completed, get_next_pending_phase, PHASE_NAMES
-from utils import get_ffmpeg_path
+from utils import (
+    get_ffmpeg_path,
+    get_video_dir,
+    get_temp_dir,
+    get_final_dir,
+    ensure_dirs,
+    run_subprocess,
+    utc_now,
+    parse_srt_blocks,
+    _seconds_to_srt,
+    write_srt_blocks,
+    target_is_fresh,
+    dedupe_preserve_order,
+    shorten_text,
+)
 
 
 INTENT_ENUMS = {
@@ -67,55 +81,6 @@ def ensure_mise_environment():
         pass
 
 
-def get_video_dir(video_id: str) -> Path:
-    return Path(f"./translations/{video_id}")
-
-
-def get_temp_dir(video_id: str) -> Path:
-    return get_video_dir(video_id) / "temp"
-
-
-def get_final_dir(video_id: str) -> Path:
-    return get_video_dir(video_id) / "final"
-
-
-def ensure_dirs(video_id: str) -> None:
-    get_temp_dir(video_id).mkdir(parents=True, exist_ok=True)
-    get_final_dir(video_id).mkdir(parents=True, exist_ok=True)
-
-
-def run_subprocess(
-    cmd: list[str],
-    heartbeat_phase: int | None = None,
-    heartbeat_name: str | None = None,
-    heartbeat_interval: int = 60,
-) -> tuple[int, str]:
-    if heartbeat_phase is None or heartbeat_name is None:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        output = (result.stdout or "") + (result.stderr or "")
-        return result.returncode, output.strip()
-
-    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stream:
-        process = subprocess.Popen(cmd, stdout=stream, stderr=stream, text=True)
-        started_at = time.monotonic()
-        last_heartbeat = started_at
-
-        while True:
-            try:
-                returncode = process.wait(timeout=5)
-                break
-            except subprocess.TimeoutExpired:
-                now = time.monotonic()
-                if now - last_heartbeat >= heartbeat_interval:
-                    elapsed = int(now - started_at)
-                    print(f"[Phase {heartbeat_phase}/10][HEARTBEAT] {heartbeat_name} | elapsed: {elapsed}s")
-                    last_heartbeat = now
-
-        stream.seek(0)
-        output = stream.read().strip()
-        return returncode, output
-
-
 def report_step(phase: int, step: str, status: str, msg: str = "") -> None:
     if status == "RUNNING":
         print(f"[Phase {phase}/10][STEP][RUNNING] {step}")
@@ -129,10 +94,6 @@ def report_step(phase: int, step: str, status: str, msg: str = "") -> None:
         if msg:
             line += f" | error: {msg}"
         print(line)
-
-
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def validate_intent_payload(intent: dict) -> tuple[bool, str]:
@@ -157,44 +118,6 @@ def validate_intent_payload(intent: dict) -> tuple[bool, str]:
 
 def is_valid_youtube_url(url: str) -> bool:
     return "youtube.com/" in url or "youtu.be/" in url
-
-
-def parse_srt_blocks(path: Path) -> list[dict]:
-    content = path.read_text(encoding="utf-8").strip()
-    if not content:
-        return []
-
-    blocks = re.split(r"\n\s*\n", content)
-    parsed = []
-    for block in blocks:
-        lines = [line.rstrip("\r") for line in block.splitlines()]
-        if len(lines) < 3:
-            continue
-        parsed.append(
-            {
-                "index": lines[0].strip(),
-                "timecode": lines[1].strip(),
-                "text": "\n".join(lines[2:]).strip(),
-            }
-        )
-    return parsed
-
-
-def _seconds_to_srt(secs: float) -> str:
-    """Convert float seconds to SRT timestamp: 00:00:00,000"""
-    secs = max(0, secs)
-    h = int(secs // 3600)
-    m = int((secs % 3600) // 60)
-    s = int(secs % 60)
-    ms = int((secs - int(secs)) * 1000)
-    return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
-
-
-def write_srt_blocks(path: Path, blocks: list[dict]) -> None:
-    rendered = []
-    for block in blocks:
-        rendered.append(f"{block['index']}\n{block['timecode']}\n{block['text']}")
-    path.write_text("\n\n".join(rendered) + ("\n" if rendered else ""), encoding="utf-8")
 
 
 def find_existing_official_srt(temp_dir: Path) -> Path | None:
@@ -322,16 +245,6 @@ def ensure_subtitle_style_config(temp_dir: Path) -> Path:
     return style_path
 
 
-def target_is_fresh(target: Path, sources: list[Path]) -> bool:
-    if not target.exists():
-        return False
-    target_mtime = target.stat().st_mtime
-    for source in sources:
-        if source.exists() and source.stat().st_mtime > target_mtime:
-            return False
-    return True
-
-
 def ensure_chinese_ass(temp_dir: Path) -> tuple[int, str]:
     zh_translated = temp_dir / "zh_translated.srt"
     zh_only_ass = temp_dir / "zh_only.ass"
@@ -438,25 +351,6 @@ def load_video_info(temp_dir: Path) -> dict:
         return json.loads(info_file.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return {}
-
-
-def dedupe_preserve_order(items: list[str]) -> list[str]:
-    seen = set()
-    result = []
-    for item in items:
-        normalized = " ".join(item.split())
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        result.append(normalized)
-    return result
-
-
-def shorten_text(text: str, limit: int) -> str:
-    compact = " ".join((text or "").split())
-    if len(compact) <= limit:
-        return compact
-    return compact[: limit - 3].rstrip() + "..."
 
 
 def build_cover_options(video_id: str, temp_dir: Path, intent: dict | None = None) -> dict:
