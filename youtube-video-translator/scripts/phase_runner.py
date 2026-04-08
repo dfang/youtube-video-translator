@@ -190,298 +190,6 @@ def ensure_audited_subtitles(temp_dir: Path) -> tuple[int, str]:
     return 0, str(en_audited)
 
 
-def get_subtitle_style_path(temp_dir: Path) -> Path:
-    return temp_dir / STYLE_CONFIG_FILENAME
-
-
-def build_default_subtitle_style_config() -> dict:
-    return {
-        "preset": "mobile_default",
-        "notes": "推荐先用 mobile_default。若预览效果不好，只修改 preset，然后重新运行 phase 7 重新烧录字幕。",
-        "available_presets": {
-            "mobile_default": {
-                "label": "移动端默认（推荐）",
-                "description": "白字、黑描边、中文 18 号，适合手机竖握和横握观看。",
-            },
-            "high_contrast": {
-                "label": "高对比",
-                "description": "更粗描边、更大字号，适合亮背景或细节复杂画面。",
-            },
-            "soft_dark": {
-                "label": "柔和暗边",
-                "description": "暖白字配深灰描边，观感更柔和。",
-            },
-            "bold_yellow": {
-                "label": "黄色强调",
-                "description": "黄字深描边，适合教程、解说类内容。",
-            },
-            "black_white_thin": {
-                "label": "黑字白描细",
-                "description": "黑字配白描边（1.5px），中文 18/英文 13，适合浅色背景。",
-            },
-            "black_white_medium": {
-                "label": "黑字白描中",
-                "description": "黑字配白描边（2.5px），中文 20/英文 14，中等醒目。",
-            },
-            "black_white_thick": {
-                "label": "黑字白描粗",
-                "description": "黑字配白描边（3.5px），中文 22/英文 15，粗壮有力。",
-            },
-            "black_white_bold": {
-                "label": "黑字白描强调",
-                "description": "深黑字配白描边（3.0px）+白底阴影，中文 21/英文 14。",
-            },
-        },
-    }
-
-
-def ensure_subtitle_style_config(temp_dir: Path) -> Path:
-    style_path = get_subtitle_style_path(temp_dir)
-    if not style_path.exists():
-        style_path.write_text(
-            json.dumps(build_default_subtitle_style_config(), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-    return style_path
-
-
-def ensure_chinese_ass(temp_dir: Path) -> tuple[int, str]:
-    zh_translated = temp_dir / "zh_translated.srt"
-    zh_only_ass = temp_dir / "zh_only.ass"
-    style_config = ensure_subtitle_style_config(temp_dir)
-
-    if target_is_fresh(zh_only_ass, [zh_translated, style_config, SKILL_ROOT / "scripts" / "srt_to_ass.py"]):
-        return 0, str(zh_only_ass)
-    if not zh_translated.exists():
-        return 1, "zh_translated.srt not found"
-
-    exit_code, output = run_subprocess(
-        [
-            sys.executable,
-            str(SKILL_ROOT / "scripts/srt_to_ass.py"),
-            str(zh_translated),
-            str(zh_only_ass),
-            str(style_config),
-        ]
-    )
-    if exit_code != 0:
-        return exit_code, output
-    if not zh_only_ass.exists():
-        return 1, "zh_only.ass not generated"
-    return 0, str(zh_only_ass)
-
-
-def ensure_bilingual_ass(temp_dir: Path) -> tuple[int, str]:
-    zh_translated = temp_dir / "zh_translated.srt"
-    en_audited = temp_dir / "en_audited.srt"
-    bilingual_srt = temp_dir / "bilingual.srt"
-    bilingual_ass = temp_dir / "bilingual.ass"
-    style_config = ensure_subtitle_style_config(temp_dir)
-
-    if target_is_fresh(
-        bilingual_ass,
-        [zh_translated, en_audited, style_config, SKILL_ROOT / "scripts" / "srt_to_ass.py"],
-    ):
-        return 0, str(bilingual_ass)
-
-    if not zh_translated.exists():
-        return 1, "zh_translated.srt not found"
-    if not en_audited.exists():
-        return 1, "en_audited.srt not found"
-
-    zh_blocks = parse_srt_blocks(zh_translated)
-    en_blocks = parse_srt_blocks(en_audited)
-    if len(zh_blocks) != len(en_blocks):
-        return 1, f"bilingual subtitle mismatch: zh={len(zh_blocks)} en={len(en_blocks)}"
-
-    merged = []
-    for zh_block, en_block in zip(zh_blocks, en_blocks):
-        if zh_block["index"] != en_block["index"] or zh_block["timecode"] != en_block["timecode"]:
-            return 1, f"bilingual subtitle mismatch at block {zh_block['index']}"
-        zh_text = zh_block["text"].replace("\\N", "\n").strip()
-        en_text = en_block["text"].replace("\\N", "\n").strip()
-        merged.append(
-            {
-                "index": zh_block["index"],
-                "timecode": zh_block["timecode"],
-                "text": f"{zh_text}\n{en_text}".strip(),
-            }
-        )
-
-    write_srt_blocks(bilingual_srt, merged)
-    exit_code, output = run_subprocess(
-        [
-            sys.executable,
-            str(SKILL_ROOT / "scripts/srt_to_ass.py"),
-            str(bilingual_srt),
-            str(bilingual_ass),
-            str(style_config),
-        ]
-    )
-    if exit_code != 0:
-        return exit_code, output
-    if not bilingual_ass.exists():
-        return 1, "bilingual.ass not generated"
-    return 0, str(bilingual_ass)
-
-
-def ensure_subtitle_overlay(temp_dir: Path, intent: dict | None = None) -> tuple[int, str]:
-    layout = (intent or {}).get("subtitle_layout", "bilingual")
-    overlay = temp_dir / "subtitle_overlay.ass"
-
-    if layout == "chinese_only":
-        exit_code, source_ass = ensure_chinese_ass(temp_dir)
-    else:
-        exit_code, source_ass = ensure_bilingual_ass(temp_dir)
-
-    if exit_code != 0:
-        return exit_code, source_ass
-
-    source_path = Path(source_ass)
-    if not target_is_fresh(overlay, [source_path]):
-        overlay.write_text(source_path.read_text(encoding="utf-8"), encoding="utf-8")
-    return 0, str(overlay)
-
-
-def load_video_info(temp_dir: Path) -> dict:
-    info_file = temp_dir / "video.info.json"
-    if not info_file.exists():
-        return {}
-    try:
-        return json.loads(info_file.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return {}
-
-
-def build_cover_options(video_id: str, temp_dir: Path, intent: dict | None = None) -> dict:
-    info = load_video_info(temp_dir)
-    source_title = (
-        info.get("title")
-        or info.get("fulltitle")
-        or video_id
-    )
-    source_title = shorten_text(source_title, 58)
-    uploader = shorten_text(info.get("uploader") or info.get("channel") or "YouTube", 36)
-    layout = (intent or {}).get("subtitle_layout", "bilingual")
-    layout_label = "双语字幕" if layout == "bilingual" else "中文字幕"
-
-    title_candidates = dedupe_preserve_order(
-        [
-            f"{layout_label} | {source_title}",
-            f"{source_title}：{layout_label}版",
-            f"中文解说 | {source_title}",
-            f"{source_title}｜完整中文翻译",
-            f"{source_title}｜中文搬运",
-        ]
-    )[:5]
-
-    subtitle_candidates = dedupe_preserve_order(
-        [
-            f"来源：{uploader}",
-            layout_label,
-            f"{layout_label} / 原作者信息见简介",
-            "中文本地化版本",
-            "转载与翻译整理",
-        ]
-    )
-
-    candidates = []
-    for idx, title in enumerate(title_candidates, start=1):
-        subtitle = subtitle_candidates[(idx - 1) % len(subtitle_candidates)]
-        candidates.append(
-            {
-                "id": idx,
-                "title": shorten_text(title, 80),
-                "subtitle": shorten_text(subtitle, 40),
-            }
-        )
-
-    return {
-        "video_id": video_id,
-        "generated_at": utc_now(),
-        "source_title": source_title,
-        "subtitle_layout": layout,
-        "candidates": candidates,
-        "selection_template": {
-            "candidate_id": 1,
-            "title": "optional custom title",
-            "subtitle": "optional custom subtitle",
-            "background_image": "optional absolute or relative image path",
-        },
-    }
-
-
-def resolve_cover_selection(temp_dir: Path, options: dict) -> tuple[bool, dict | None, str]:
-    selection_file = temp_dir / "cover_selection.json"
-    if not selection_file.exists():
-        return False, None, f"interactive: choose title and write {selection_file}"
-
-    try:
-        selection = json.loads(selection_file.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return False, None, f"interactive: invalid JSON in {selection_file}"
-
-    if not isinstance(selection, dict):
-        return False, None, f"interactive: {selection_file} must contain a JSON object"
-
-    title = (selection.get("title") or "").strip()
-    subtitle = (selection.get("subtitle") or "").strip()
-    candidate_id = selection.get("candidate_id")
-
-    candidate_map = {item["id"]: item for item in options.get("candidates", [])}
-    if candidate_id is not None:
-        if not isinstance(candidate_id, int) or candidate_id not in candidate_map:
-            return False, None, f"interactive: candidate_id must match cover_options.json"
-        candidate = candidate_map[candidate_id]
-        title = title or candidate["title"]
-        subtitle = subtitle or candidate["subtitle"]
-
-    if not title:
-        return False, None, f"interactive: title is required in {selection_file}"
-    if not subtitle:
-        return False, None, f"interactive: subtitle is required in {selection_file}"
-
-    background_image = (selection.get("background_image") or "").strip()
-    if background_image:
-        bg_path = Path(background_image)
-        if not bg_path.is_absolute():
-            bg_path = (Path.cwd() / bg_path).resolve()
-        if not bg_path.exists():
-            return False, None, f"interactive: background image not found: {bg_path}"
-        background_image = str(bg_path)
-
-    return True, {
-        "title": shorten_text(title, 80),
-        "subtitle": shorten_text(subtitle, 40),
-        "background_image": background_image,
-    }, ""
-
-
-def ensure_cover_background(temp_dir: Path) -> tuple[int, str]:
-    existing = temp_dir / "cover_bg.jpg"
-    if existing.exists():
-        return 0, str(existing)
-
-    raw_video = temp_dir / "raw_video.mp4"
-    if not raw_video.exists():
-        return 1, "raw_video.mp4 not found for cover background extraction"
-
-    ffmpeg = get_ffmpeg_path()
-    if not ffmpeg:
-        return 1, "FFmpeg not found"
-
-    commands = [
-        [ffmpeg, "-y", "-ss", "00:00:05", "-i", str(raw_video), "-frames:v", "1", str(existing)],
-        [ffmpeg, "-y", "-i", str(raw_video), "-frames:v", "1", str(existing)],
-    ]
-    output = ""
-    for cmd in commands:
-        exit_code, output = run_subprocess(cmd, heartbeat_phase=6, heartbeat_name=PHASE_NAMES[6])
-        if exit_code == 0 and existing.exists():
-            return 0, str(existing)
-    return 1, output or "cover background extraction failed"
-
-
 def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> tuple[str, str]:
     temp = get_temp_dir(video_id)
     final = get_final_dir(video_id)
@@ -745,70 +453,40 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
         return "failed", logs
 
     if phase == 6:
-        cover = final / "cover_final.jpg"
-        if cover.exists():
-            return "done", str(cover)
-        options_file = temp / "cover_options.json"
-        if not options_file.exists():
-            options = build_cover_options(video_id, temp, intent)
-            options_file.write_text(json.dumps(options, ensure_ascii=False, indent=2), encoding="utf-8")
-        else:
-            try:
-                options = json.loads(options_file.read_text(encoding="utf-8"))
-            except json.JSONDecodeError:
-                options = build_cover_options(video_id, temp, intent)
-                options_file.write_text(json.dumps(options, ensure_ascii=False, indent=2), encoding="utf-8")
-
-        valid, selection, message = resolve_cover_selection(temp, options)
-        if not valid:
-            return "waiting", message
-
-        background_image = selection["background_image"]
-        if background_image:
-            bg_path = Path(background_image)
-        else:
-            exit_code, bg_message = ensure_cover_background(temp)
-            if exit_code != 0:
-                return "failed", bg_message
-            bg_path = Path(bg_message)
-
+        layout = (intent or {}).get("subtitle_layout", "bilingual")
         exit_code, output = run_subprocess(
             [
-                sys.executable,
-                str(SKILL_ROOT / "scripts/cover_generator.py"),
-                str(bg_path),
-                str(cover),
-                selection["title"],
-                selection["subtitle"],
-            ]
+                sys.executable, str(SKILL_ROOT / "scripts/phase_6_cover.py"),
+                "--video-id", video_id,
+                "--temp-dir", str(temp),
+                "--final-dir", str(final),
+                "--layout", layout
+            ],
+            heartbeat_phase=6,
+            heartbeat_name=PHASE_NAMES[6]
         )
-        if exit_code == 0 and cover.exists():
-            return "done", str(cover)
-        return "failed", output or "cover generation failed"
+        if exit_code == 0:
+            if output.startswith("WAIT:"):
+                return "waiting", output
+            if output.startswith("interactive:"):
+                return "waiting", output
+            cover = final / "cover_final.jpg"
+            if cover.exists():
+                return "done", str(cover)
+        return "failed", output
 
     if phase == 7:
-        video = temp / "raw_video.mp4"
-        voiceover = temp / "zh_voiceover.mp3"
-        final_video = final / "final_video.mp4"
-
-        if not video.exists():
-            return "failed", "raw_video.mp4 not found"
-        exit_code, message = ensure_subtitle_overlay(temp, intent)
-        if exit_code != 0:
-            return "failed", message
-        ass = Path(message)
-        freshness_sources = [video, ass]
-        if voiceover.exists():
-            freshness_sources.append(voiceover)
-        if final_video.exists() and target_is_fresh(final_video, freshness_sources):
-            return "done", str(final_video)
-
-        audio_arg = str(voiceover) if voiceover.exists() else ""
+        layout = (intent or {}).get("subtitle_layout", "bilingual")
+        original_audio = (intent or {}).get("audio_mode") == "original"
+        
         cmd = [
-            sys.executable, str(SKILL_ROOT / "scripts/video_muxer.py"),
-            str(video), audio_arg, str(ass), str(final),
+            sys.executable, str(SKILL_ROOT / "scripts/phase_7_video_muxer.py"),
+            "--video-id", video_id,
+            "--temp-dir", str(temp),
+            "--final-dir", str(final),
+            "--layout", layout
         ]
-        if not voiceover.exists():
+        if original_audio:
             cmd.append("--original-audio")
 
         exit_code, output = run_subprocess(
@@ -816,7 +494,8 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
             heartbeat_phase=7,
             heartbeat_name=PHASE_NAMES[7],
         )
-        if exit_code == 0 and final_video.exists():
+        if exit_code == 0:
+            final_video = final / "final_video.mp4"
             return "done", str(final_video)
         return "failed", output
 
