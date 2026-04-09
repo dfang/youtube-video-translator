@@ -57,7 +57,7 @@ def create_cover(bg_path, output_path, title, subtitle):
 
     max_w = int(width * 0.88)
     title_font, title_w, title_h = get_optimal_font_size(draw, title, font_path, max_w, 130)
-    subtitle_font, sub_w, sub_h = get_optimal_font_size(draw, subtitle, font_path, max_w, 55)
+    subtitle_font, sub_w, sub_h = get_optimal_font_size(draw, subtitle, font_path, max_w, 35)
 
     spacing = 40
     padding = 60
