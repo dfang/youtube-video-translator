@@ -21,6 +21,7 @@ from utils import (
     write_srt_blocks,
     target_is_fresh,
 )
+from srt_to_ass import PRESET_STYLES
 
 STYLE_CONFIG_FILENAME = "subtitle_style.json"
 
@@ -28,31 +29,16 @@ def get_subtitle_style_path(temp_dir: Path) -> Path:
     return temp_dir / STYLE_CONFIG_FILENAME
 
 def build_default_subtitle_style_config() -> dict:
+    available_presets = {}
+    for key, cfg in PRESET_STYLES.items():
+        available_presets[key] = {
+            "label": cfg.get("label", key),
+            "description": cfg.get("description", ""),
+        }
     return {
-        "preset": "modern_bilingual",
+        "preset": "mobile_default",
         "notes": "修改 preset 后重新运行 phase 7 即可应用。",
-        "available_presets": {
-            "modern_bilingual": {
-                "label": "现代双语（推荐）",
-                "description": "细致的描边，中文 18/英文 14，阅读舒适感最佳。",
-            },
-            "mobile_simple": {
-                "label": "简约移动端",
-                "description": "无衬线体，适合快节奏短视频。",
-            },
-            "cinema_standard": {
-                "label": "影院标准",
-                "description": "低对比度，适合沉浸式观影。",
-            },
-            "bold_yellow": {
-                "label": "强调黄色",
-                "description": "适合教程/Vlog讲解。",
-            },
-            "classic_high_contrast": {
-                "label": "经典高对比",
-                "description": "白字黑边，适应性最强。",
-            }
-        },
+        "available_presets": available_presets,
     }
 
 def ensure_subtitle_style_config(temp_dir: Path) -> Path:

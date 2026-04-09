@@ -107,6 +107,13 @@ Rules:
   - `black_white_medium`: black text, white outline (2.5px), Chinese 20/English 14
   - `black_white_thick`: black text, white outline (3.5px), Chinese 22/English 15
   - `black_white_bold`: deep black text, white outline (3.0px) + white shadow, Chinese 21/English 14
+  - `neon_glow`: cyan text with dark teal glow, sci-fi aesthetic
+  - `warm_cream`: cream text with brown outline, vintage warmth
+  - `retro_orange`: orange text with dark brown outline, cinematic feel
+  - `mint_fresh`: mint green text with dark green outline, fresh & clean
+  - `elegant_pink`: light pink text with deep purple outline, elegant & soft
+  - `cinema_gold`: golden text with dark brown outline, classic cinema style
+  - `minimal_white`: pure white text, nearly no outline, minimalist
 
 ### Phase 5: Voiceover
 
