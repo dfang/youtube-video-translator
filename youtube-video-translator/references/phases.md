@@ -127,10 +127,9 @@ Rules:
 
 ### Phase 8: Description Generator
 
-- **Runner**: `phase_runner.py --phase 8 --video-id [ID]`
-- **Script**: `scripts/phase_9/description_generator.py`
-- **Output**: `final/description.txt`
-- **Generates**: Bilibili-ready description with source info, translation notes, chapters (if available), and original description excerpt
+- **Runner**: spawn subagent using `agents/description.md`
+- **Agent provides**: `video_id`
+- **Output**: `final/description.txt` — Bilibili-ready description in plain Chinese text
 
 ### Phase 9: Upload Preview
 
