@@ -177,8 +177,6 @@ def main():
     if not options_file.exists():
         options = build_cover_options(args.video_id, temp, args.layout)
         options_file.write_text(json.dumps(options, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"WAIT: choose cover options in {options_file}")
-        sys.exit(0)
     else:
         try:
             options = json.loads(options_file.read_text(encoding="utf-8"))
@@ -186,10 +184,24 @@ def main():
             options = build_cover_options(args.video_id, temp, args.layout)
             options_file.write_text(json.dumps(options, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    candidates = options.get("candidates", [])
+
+    # Print options for user selection
+    print("=" * 60)
+    print("请选择封面标题和副标题 (choose cover title and subtitle)")
+    print("=" * 60)
+    for c in candidates:
+        print(f"\n  [{c['id']}] {c['title']}")
+        print(f"      {c['subtitle']}")
+    print("\n" + "-" * 60)
+    print(f"回复格式: {{'candidate_id': N}}  或  {{'candidate_id': N, 'title': '自定义标题', 'subtitle': '自定义副标题'}}")
+    print(f"或者直接编辑: {options_file}")
+    print("-" * 60)
+
     valid, selection, message = resolve_cover_selection(temp, options)
     if not valid:
-        print(message)
-        sys.exit(0) # In runner, we treat 'interactive' as WAITING
+        print(f"\nWAIT: {message}")
+        sys.exit(0)
 
     background_image = selection["background_image"]
     if background_image:
