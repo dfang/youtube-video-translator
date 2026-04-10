@@ -12,7 +12,7 @@ Rules:
 
 - `audio_mode` controls whether Phase 5 generates `zh_voiceover.mp3`.
 - `subtitle_mode` controls whether Phase 4 prefers official subtitles, requires official subtitles, or forces WhisperX transcription.
-- `subtitle_layout` controls whether Phase 4/6 render bilingual subtitles or Chinese-only subtitles.
+- `subtitle_layout` controls whether Phase 4/7 render bilingual subtitles or Chinese-only subtitles.
 - `confirmed` must be `true` before the runner continues.
 
 ## Phase Definitions (file-based)
@@ -20,7 +20,7 @@ Rules:
 ### Phase 0: Environment Validation
 
 - **Runner**: `phase_runner.py --phase 0`
-- **Script**: `scripts/phase_0/env_check.py`
+- **Script**: `scripts/env_check.py`
 - **Output**: Pass/fail + fix commands
 
 ### Phase 1: Gather Intents (Interactive)
@@ -153,5 +153,5 @@ Rules:
 ### Phase 11: Cleanup
 
 - **Runner**: `phase_runner.py --phase 11 --video-id [ID]`
-- **Script**: `scripts/phase_10/cleaner.py`
+- **Script**: `scripts/phase_11/cleaner.py`
 - **Skip**: Unless user explicitly requested cleanup in Phase 1

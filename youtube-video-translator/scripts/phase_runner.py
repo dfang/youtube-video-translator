@@ -15,7 +15,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-_dev_root = Path(__file__).resolve().parent.parent.parent
+_dev_root = Path(__file__).resolve().parent.parent
 # Always use the actual location of the running script.
 # When OpenClaw invokes the installed skill, __file__.resolve() already points there.
 SKILL_ROOT = _dev_root
@@ -431,7 +431,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
 
         final_video = final / "final_video.mp4"
         if not final_video.exists():
-            return "failed", "final_video.mp4 not found — run phase 6 first"
+            return "failed", "final_video.mp4 not found — run phase 7 first"
 
         # Check publish mode via publish_result.json or prompt
         publish_result = final / "publish_result.json"

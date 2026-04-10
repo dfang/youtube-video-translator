@@ -79,15 +79,51 @@ def create_muxed_video(video_path, audio_path, ass_path, output_target, use_orig
     print(f"合成完成: {final_output}")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 5:
-        print("用法: python video_muxer.py [VideoPath] [AudioPath] [AssPath] [OutputTarget] [--original-audio]")
-        print("OutputTarget 可传项目目录、final 目录或最终 .mp4 文件路径")
-        sys.exit(1)
+    # 支持两种调用方式：
+    # 1) 位置参数（直接调用）: video_muxer.py [VideoPath] [AudioPath] [AssPath] [OutputTarget] [--original-audio]
+    # 2) 命名参数（phase_runner 调用）: video_muxer.py --video-id ID --temp-dir DIR --final-dir DIR --layout LAYOUT [--original-audio]
+    args = sys.argv[1:]
 
-    v_path = sys.argv[1]
-    a_path = sys.argv[2]
-    sub_path = sys.argv[3]
-    out_target = sys.argv[4]
-    use_original = "--original-audio" in sys.argv
+    # 检测是否为命名参数模式
+    if args and args[0].startswith("--"):
+        # 命名参数模式
+        if "--video-id" not in args and "--temp-dir" not in args:
+            print("用法: video_muxer.py --video-id ID --temp-dir DIR --final-dir DIR --layout LAYOUT [--original-audio]")
+            sys.exit(1)
 
-    create_muxed_video(v_path, a_path, sub_path, out_target, use_original)
+        import argparse
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--video-id", required=True)
+        parser.add_argument("--temp-dir", required=True)
+        parser.add_argument("--final-dir", required=True)
+        parser.add_argument("--layout", default="bilingual")
+        parser.add_argument("--original-audio", action="store_true")
+        parsed = parser.parse_args(args)
+
+        video_id = parsed.video_id
+        temp_dir = Path(parsed.temp_dir)
+        final_dir = Path(parsed.final_dir)
+        layout = parsed.layout
+        use_original = parsed.original_audio
+
+        video_path = str(temp_dir / "raw_video.mp4")
+        ass_path = str(temp_dir / ("bilingual.ass" if layout == "bilingual" else "zh_only.ass"))
+        output_target = str(final_dir)
+    else:
+        # 位置参数模式
+        if len(sys.argv) < 5:
+            print("用法: python video_muxer.py [VideoPath] [AudioPath] [AssPath] [OutputTarget] [--original-audio]")
+            print("OutputTarget 可传项目目录、final 目录或最终 .mp4 文件路径")
+            sys.exit(1)
+
+        v_path = sys.argv[1]
+        a_path = sys.argv[2]
+        sub_path = sys.argv[3]
+        out_target = sys.argv[4]
+        use_original = "--original-audio" in sys.argv
+
+        video_path = v_path
+        ass_path = sub_path
+        output_target = out_target
+
+    create_muxed_video(video_path, None, ass_path, output_target, use_original)
