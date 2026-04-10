@@ -94,7 +94,7 @@ Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold
 Style: Default,{default_style['Fontname']},{default_style['Fontsize']},{default_style['PrimaryColour']},{default_style['OutlineColour']},{default_style['BackColour']},{default_style['Bold']},{default_style['Italic']},{default_style['Alignment']},{default_style['MarginL']},{default_style['MarginR']},{default_style['MarginV']}
 
 [Events]
-Format: Layer, Start, End, Style, Text
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     lines = [header]
 
@@ -144,7 +144,7 @@ Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold
 Style: Default,Arial,36,&H00FFFFFF,&H00000000,&H00000000,0,0,2,10,10,10
 
 [Events]
-Format: Layer, Start, End, Style, Text
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     output_path.write_text(header + "\n".join(lines), encoding="utf-8")
     return 0

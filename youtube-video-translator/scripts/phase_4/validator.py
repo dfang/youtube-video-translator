@@ -183,7 +183,7 @@ def validate_chunks(temp_dir: Path) -> tuple[int, list[str]]:
             for src_block, dst_block in zip(source_blocks, translated_blocks):
                 if src_block["index"] != dst_block["index"]:
                     print(f"[phase_4_validator] [警告] chunk_id={chunk_id}: block index {src_block['index']} != {dst_block['index']}, skipping time check")
-                if src_block["start"] != dst_block["start"] or src_block["end"] != dst_block["end"]:
+                elif src_block["start"] != dst_block["start"] or src_block["end"] != dst_block["end"]:
                     errors.append(
                         f"[时间轴错位] chunk_id={chunk_id} block={src_block['index']}: "
                         f"{src_block['start']} --> {src_block['end']} != {dst_block['start']} --> {dst_block['end']}"
