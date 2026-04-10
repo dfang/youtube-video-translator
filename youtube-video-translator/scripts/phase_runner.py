@@ -363,7 +363,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
         return "failed", output
 
     if phase in (7, 8, 9):
-        return "skipped", f"Phase {phase} now uses sub-agent. See agents/[cover|description|uploader].md"
+        return "done", f"Phase {phase} now uses sub-agent. See agents/[cover|description|uploader].md"
 
     if phase == 10:
         if intent and not intent.get("publish"):

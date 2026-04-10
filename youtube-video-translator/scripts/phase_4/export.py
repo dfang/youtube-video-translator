@@ -128,7 +128,7 @@ def export_bilingual(segments: list, output_path: Path, style_config: dict | Non
     for seg in segments:
         src = seg.get("source_text", "").replace("\n", " ")
         dst = seg.get("translated_text", "").replace("\n", "\\N")
-        text = f"{src}\\N{dst}"
+        text = f"{dst}\\N{src}"
         start = seconds_to_ass_time(seg.get("start", 0))
         end = seconds_to_ass_time(seg.get("end", 0))
         lines.append(f"Dialogue: 0,{start},{end},Default,,0,0,0,,{text}")

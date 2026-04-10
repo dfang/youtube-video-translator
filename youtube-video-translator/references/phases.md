@@ -19,13 +19,13 @@ Rules:
 
 ### Phase 0: Environment Validation
 
-- **Runner**: `phase_runner.py --phase 0`
+- **Runner**: `phase_runner.py run --phase 0`
 - **Script**: `scripts/env_check.py`
 - **Output**: Pass/fail + fix commands
 
 ### Phase 1: Gather Intents (Interactive)
 
-- **Runner**: `phase_runner.py --phase 1 --video-id [ID]`
+- **Runner**: `phase_runner.py run --phase 1 --video-id [ID]`
 - **Agent Action**: **Ask all intent questions at once in a single message.** Do not ask them one by one.
 - **Questions**:
   1. 音频模式 (audio_mode): 原声 (original) 还是 语音合成 (voiceover)?
@@ -44,8 +44,8 @@ Rules:
 
 ### Phase 2: Setup
 
-- **Runner**: `phase_runner.py --phase 2 --video-id [ID]`
-- **Script**: `phase_runner.py` handles internally
+- **Runner**: `phase_runner.py run --phase 2 --video-id [ID]`
+- **Script**: `phase_runner.py run` handles internally
 - **Creates**: `temp/`, `final/` directories, canonical input path `temp/url.txt`
 - **Behavior**: If `temp/url.txt` is missing, runner creates a placeholder and returns `WAIT`
 - **Main agent responsibility**: Write the YouTube URL into `temp/url.txt`, then rerun Phase 2 or resume
@@ -53,7 +53,7 @@ Rules:
 
 ### Phase 3: Metadata + Caption Discovery + Video Download
 
-- **Runner**: `phase_runner.py --phase 3 --video-id [ID]`
+- **Runner**: `phase_runner.py run --phase 3 --video-id [ID]`
 - **Scripts** (called in order):
   1. `scripts/phase_3/metadata_probe.py`: yt-dlp probe → `temp/metadata.json` (video_id, title, duration, has_official_caption, caption_languages)
   2. `scripts/phase_3/caption_discovery.py`: reads metadata, decides `official` or `asr` path → `temp/caption_plan.json`
@@ -64,7 +64,7 @@ Rules:
 
 ### Phase 4: Subtitle Acquisition → Chunk Translation → Align → Export
 
-- **Runner**: `phase_runner.py --phase 4 --video-id [ID]`
+- **Runner**: `phase_runner.py run --phase 4 --video-id [ID]`
 - **Pipeline script**: `scripts/phase_4/pipeline.py` (orchestrates 7 atomic steps):
   1. `caption_fetch.py` — official caption path: yt-dlp → `temp/source_segments.json` (skip if ASR)
   2. `audio_extract.py` — ASR path only: `temp/video.mp4` → `temp/source_audio.wav` (skip if official)
@@ -96,14 +96,14 @@ Rules:
 
 ### Phase 5: Voiceover
 
-- **Runner**: `phase_runner.py --phase 5 --video-id [ID]`
+- **Runner**: `phase_runner.py run --phase 5 --video-id [ID]`
 - **Script**: `scripts/phase_5/voiceover_tts.py`
 - **Output**: `temp/zh_voiceover.mp3`
 - **Skip**: If user chose original audio in Phase 1
 
 ### Phase 6: Compose Final Video
 
-- **Runner**: `phase_runner.py --phase 6 --video-id [ID]`
+- **Runner**: `phase_runner.py run --phase 6 --video-id [ID]`
 - **Script**: `scripts/phase_6/video_muxer.py`
 - **Output**: `final/final_video.mp4`
 - **Modes**: `--original-audio` or with voiceover
@@ -133,7 +133,7 @@ Rules:
 
 ### Phase 10: Bilibili Publish
 
-- **Runner**: `phase_runner.py --phase 10 --video-id [ID]`
+- **Runner**: `phase_runner.py run --phase 10 --video-id [ID]`
 - **Blocking check**: Fails immediately if `final_video.mp4` is missing — must run Phase 6 first.
 - **Two publish modes**:
   - `draft` — writes `final/publish_result.json` with `mode: draft`. Runner skips Bilibili upload, confirms preview is available.
@@ -145,6 +145,6 @@ Rules:
 
 ### Phase 11: Cleanup
 
-- **Runner**: `phase_runner.py --phase 11 --video-id [ID]`
+- **Runner**: `phase_runner.py run --phase 11 --video-id [ID]`
 - **Script**: `scripts/phase_11/cleaner.py`
 - **Skip**: Unless user explicitly requested cleanup in Phase 1

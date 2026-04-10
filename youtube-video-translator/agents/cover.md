@@ -35,8 +35,8 @@ If `cover_options.json` already exists and is fresh (same video_id, same subtitl
 Otherwise, generate 5 candidates based on source metadata:
 
 - Read `metadata.json` for `title`, `uploader`
-- Build 5 title candidates combining layout label + source title
-- Build 5 subtitle candidates (source credit, layout label, etc.)
+- **主标题必须为中文**：将原标题意译/翻译为中文，可保留英文关键词
+- 副标题：可包含原文标题、原作者、布局标签等辅助信息（中文或中英混排）
 - Pair them into 5 distinct title/subtitle combinations
 - Write `cover_options.json`
 
@@ -88,11 +88,16 @@ Use ffmpeg to composite the chosen title and subtitle onto the background image.
 ffmpeg command reference (adjust font/path as needed):
 
 ```bash
+# macOS 中文字体路径 (系统自带)
+FONT_FILE="/System/Library/Fonts/STHeiti Medium.ttc"
+
 ffmpeg -y -i cover_bg.jpg -vf "
-drawtext=text='{title}':fontsize=36:fontcolor=white:borderw=2:bordercolor=black:x=(w-text_w)/2:y=h-100,
-drawtext=text='{subtitle}':fontsize=24:fontcolor=white:borderw=1:bordercolor=black:x=(w-text_w)/2:y=h-50
+drawtext=text='{title}':fontsize=36:fontcolor=white:borderw=2:bordercolor=black:fontfile='${FONT_FILE}':x=(w-text_w)/2:y=h-100,
+drawtext=text='{subtitle}':fontsize=24:fontcolor=white:borderw=1:bordercolor=black:fontfile='${FONT_FILE}':x=(w-text_w)/2:y=h-50
 " -q:v 2 cover_final.jpg
 ```
+
+Note: `fontfile` is required for Chinese characters to render correctly. On Linux, use `fc-list :lang=zh` to find available Chinese fonts (e.g., `/usr/share/fonts/truetype/wqy/wqy-microhei.ttc`). On Windows, use something like `C:/Windows/Fonts/simhei.ttf`.
 
 - Title: top area of cover, larger font (~36)
 - Subtitle: below title, smaller font (~24)
