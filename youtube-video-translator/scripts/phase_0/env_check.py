@@ -5,6 +5,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+_dev_root = Path(__file__).resolve().parent.parent.parent
+SKILL_ROOT = _dev_root
+sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
+
 from utils import check_libass_support, get_ffmpeg_path
 
 

@@ -14,7 +14,11 @@ import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
-SKILL_ROOT = Path(__file__).resolve().parent.parent
+_dev_root = Path(__file__).resolve().parent.parent.parent
+SKILL_ROOT = _dev_root
+sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
+
 LONG_VIDEO_THRESHOLD_SECONDS = 3600.0
 LONG_VIDEO_MAX_CHUNK_DURATION = 30.0
 DEFAULT_MAX_SEGMENTS_PER_CHUNK = 40

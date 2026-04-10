@@ -2,13 +2,18 @@ import os
 import sys
 import subprocess
 import json
+from pathlib import Path
+
+_dev_root = Path(__file__).resolve().parent.parent.parent
+SKILL_ROOT = _dev_root
+sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
+
 from utils import get_ffmpeg_path
 
-# 尝试导入 state_manager 以支持状态更新
 try:
     from state_manager import update_phase
 except ImportError:
-    # 如果不在同一目录下或环境不对，退化为无状态模式
     update_phase = None
 
 # 优先使用具有完整能力的 ffmpeg
@@ -83,10 +88,9 @@ def _get_initial_prompt():
     custom_terms = []
 
     # 1. 尝试从 references/terms.txt 加载自定义术语（优先级最高）
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    terms_file = os.path.join(base_dir, "references", "terms.txt")
+    terms_file = SKILL_ROOT / "references" / "terms.txt"
 
-    if os.path.exists(terms_file):
+    if terms_file.exists():
         try:
             with open(terms_file, "r", encoding="utf-8") as f:
                 # 支持按行、逗号分隔

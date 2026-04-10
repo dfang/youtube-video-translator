@@ -9,9 +9,10 @@ import json
 import argparse
 from pathlib import Path
 
-# Add scripts dir to path for imports
-SKILL_ROOT = Path(__file__).resolve().parent.parent
+_dev_root = Path(__file__).resolve().parent.parent.parent
+SKILL_ROOT = _dev_root
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
 
 from utils import (
     get_temp_dir,
@@ -152,7 +153,7 @@ def ensure_cover_background(temp_dir: Path) -> tuple[int, str]:
     ]
     output = ""
     for cmd in commands:
-        exit_code, output = run_subprocess(cmd, heartbeat_phase=6, heartbeat_name="Cover Background Extraction")
+        exit_code, output = run_subprocess(cmd, heartbeat_phase=7, heartbeat_name="Cover Background Extraction")
         if exit_code == 0 and existing.exists():
             return 0, str(existing)
     return 1, output or "cover background extraction failed"
@@ -216,7 +217,7 @@ def main():
     exit_code, output = run_subprocess(
         [
             sys.executable,
-            str(SKILL_ROOT / "scripts/cover_generator.py"),
+            str(SKILL_ROOT / "scripts/phase_7/old_cover_generator.py"),
             str(bg_path),
             str(cover),
             selection["title"],

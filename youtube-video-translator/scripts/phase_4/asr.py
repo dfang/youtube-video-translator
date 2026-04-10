@@ -13,14 +13,12 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-SKILL_ROOT = Path(__file__).resolve().parent.parent
-SYS_PATH = str(SKILL_ROOT / "scripts")
-sys.path.insert(0, SYS_PATH)
+_dev_root = Path(__file__).resolve().parent.parent.parent
+SKILL_ROOT = _dev_root
+sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
 
-try:
-    from utils import get_ffmpeg_path
-except ImportError:
-    get_ffmpeg_path = lambda: "ffmpeg"  # fallback
+from utils import get_ffmpeg_path
 
 
 def normalize_timestamp(ts: str) -> float:

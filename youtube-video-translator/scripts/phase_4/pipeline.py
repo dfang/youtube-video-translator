@@ -9,23 +9,24 @@ import json
 import argparse
 from pathlib import Path
 
-# Add scripts dir to path for imports
-SKILL_ROOT = Path(__file__).resolve().parent.parent
+_dev_root = Path(__file__).resolve().parent.parent.parent
+SKILL_ROOT = _dev_root
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
 
 from utils import run_subprocess
 from state_manager import PHASE_NAMES
 
 def report_step(step: str, status: str, msg: str = "") -> None:
     if status == "RUNNING":
-        print(f"[Phase 4/10][STEP][RUNNING] {step}")
+        print(f"[Phase 4/11][STEP][RUNNING] {step}")
     elif status == "DONE":
-        line = f"[Phase 4/10][STEP][DONE] {step}"
+        line = f"[Phase 4/11][STEP][DONE] {step}"
         if msg:
             line += f" | {msg}"
         print(line)
     elif status == "FAILED":
-        line = f"[Phase 4/10][STEP][FAILED] {step}"
+        line = f"[Phase 4/11][STEP][FAILED] {step}"
         if msg:
             line += f" | error: {msg}"
         print(line)
@@ -65,7 +66,7 @@ def main():
         
         report_step("caption_fetch", "RUNNING")
         exit_code, output = run_subprocess(
-            [sys.executable, str(Path(__file__).parent / "phase_4_caption_fetch.py"), url, str(temp)],
+            [sys.executable, str(Path(__file__).parent / "caption_fetch.py"), url, str(temp)],
             heartbeat_phase=4,
             heartbeat_name=PHASE_NAMES[4],
         )
@@ -81,10 +82,10 @@ def main():
             sys.exit(1)
         
         source_audio = temp / "source_audio.wav"
-        if (Path(__file__).parent / "phase_4_audio_extract.py").exists():
+        if (Path(__file__).parent / "audio_extract.py").exists():
             report_step("audio_extract", "RUNNING")
             exit_code, output = run_subprocess(
-                [sys.executable, str(Path(__file__).parent / "phase_4_audio_extract.py"), str(video_file), str(temp)],
+                [sys.executable, str(Path(__file__).parent / "audio_extract.py"), str(video_file), str(temp)],
                 heartbeat_phase=4,
                 heartbeat_name=PHASE_NAMES[4],
             )
@@ -95,7 +96,7 @@ def main():
 
         report_step("asr", "RUNNING")
         exit_code, output = run_subprocess(
-            [sys.executable, str(Path(__file__).parent / "phase_4_asr.py"), str(source_audio if source_audio.exists() else video_file), str(temp)],
+            [sys.executable, str(Path(__file__).parent / "asr.py"), str(source_audio if source_audio.exists() else video_file), str(temp)],
             heartbeat_phase=4,
             heartbeat_name=PHASE_NAMES[4],
         )
@@ -106,7 +107,7 @@ def main():
 
         report_step("asr_normalize", "RUNNING")
         exit_code, output = run_subprocess(
-            [sys.executable, str(Path(__file__).parent / "phase_4_asr_normalize.py"), str(temp)],
+            [sys.executable, str(Path(__file__).parent / "asr_normalize.py"), str(temp)],
         )
         if exit_code != 0:
             report_step("asr_normalize", "FAILED", output)
@@ -117,7 +118,7 @@ def main():
     if not (temp / "chunks.json").exists():
         report_step("chunk_build", "RUNNING")
         exit_code, output = run_subprocess(
-            [sys.executable, str(Path(__file__).parent / "phase_4_chunk_build.py"), str(temp)],
+            [sys.executable, str(Path(__file__).parent / "chunk_build.py"), str(temp)],
             heartbeat_phase=4,
             heartbeat_name=PHASE_NAMES[4],
         )
@@ -129,7 +130,7 @@ def main():
     # Step 4c: translate scheduler
     report_step("translate_scheduler", "RUNNING")
     exit_code, output = run_subprocess(
-        [sys.executable, str(Path(__file__).parent / "phase_4_translate_scheduler.py"),
+        [sys.executable, str(Path(__file__).parent / "translate_scheduler.py"),
             "--video-id", video_id, "--temp-dir", str(temp)],
         heartbeat_phase=4,
         heartbeat_name=PHASE_NAMES[4],
@@ -142,7 +143,7 @@ def main():
     # Step 4d: validate
     report_step("validator", "RUNNING")
     exit_code, output = run_subprocess(
-        [sys.executable, str(Path(__file__).parent / "phase_4_validator.py"), str(temp)],
+        [sys.executable, str(Path(__file__).parent / "validator.py"), str(temp)],
     )
     if exit_code != 0:
         report_step("validator", "FAILED", output)
@@ -152,7 +153,7 @@ def main():
     # Step 4e: align
     report_step("align", "RUNNING")
     exit_code, output = run_subprocess(
-        [sys.executable, str(Path(__file__).parent / "phase_4_align.py"), str(temp), layout],
+        [sys.executable, str(Path(__file__).parent / "align.py"), str(temp), layout],
     )
     if exit_code != 0:
         report_step("align", "FAILED", output)
@@ -162,7 +163,7 @@ def main():
     # Step 4f: export
     report_step("export", "RUNNING")
     exit_code, output = run_subprocess(
-        [sys.executable, str(Path(__file__).parent / "phase_4_export.py"), str(temp), layout],
+        [sys.executable, str(Path(__file__).parent / "export.py"), str(temp), layout],
     )
     if exit_code != 0:
         report_step("export", "FAILED", output)

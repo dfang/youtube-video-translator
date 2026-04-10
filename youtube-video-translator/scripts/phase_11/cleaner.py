@@ -1,6 +1,12 @@
 import os
 import sys
 import shutil
+from pathlib import Path
+
+_dev_root = Path(__file__).resolve().parent.parent.parent
+SKILL_ROOT = _dev_root
+sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
 
 def cleanup_temp_files(temp_dir):
     """

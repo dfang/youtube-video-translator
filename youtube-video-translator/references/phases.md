@@ -12,7 +12,7 @@ Rules:
 
 - `audio_mode` controls whether Phase 5 generates `zh_voiceover.mp3`.
 - `subtitle_mode` controls whether Phase 4 prefers official subtitles, requires official subtitles, or forces WhisperX transcription.
-- `subtitle_layout` controls whether Phase 4/7 render bilingual subtitles or Chinese-only subtitles.
+- `subtitle_layout` controls whether Phase 4/6 render bilingual subtitles or Chinese-only subtitles.
 - `confirmed` must be `true` before the runner continues.
 
 ## Phase Definitions (file-based)
@@ -20,7 +20,7 @@ Rules:
 ### Phase 0: Environment Validation
 
 - **Runner**: `phase_runner.py --phase 0`
-- **Script**: `scripts/env_check.py`
+- **Script**: `scripts/phase_0/env_check.py`
 - **Output**: Pass/fail + fix commands
 
 ### Phase 1: Gather Intents (Interactive)
@@ -55,9 +55,9 @@ Rules:
 
 - **Runner**: `phase_runner.py --phase 3 --video-id [ID]`
 - **Scripts** (called in order):
-  1. `scripts/phase_3_metadata_probe.py`: yt-dlp probe → `temp/metadata.json` (video_id, title, duration, has_official_caption, caption_languages)
-  2. `scripts/phase_3_caption_discovery.py`: reads metadata, decides `official` or `asr` path → `temp/caption_plan.json`
-  3. `scripts/phase_3_video_download.py`: yt-dlp download → `temp/video.mp4`
+  1. `scripts/phase_3/metadata_probe.py`: yt-dlp probe → `temp/metadata.json` (video_id, title, duration, has_official_caption, caption_languages)
+  2. `scripts/phase_3/caption_discovery.py`: reads metadata, decides `official` or `asr` path → `temp/caption_plan.json`
+  3. `scripts/phase_3/video_download.py`: yt-dlp download → `temp/video.mp4`
 - **Idempotent**: each script skips if its output already exists and is fresh
 - **Canonical outputs**: `temp/metadata.json`, `temp/caption_plan.json`, `temp/video.mp4`
 - **Error**: If official captions required (`subtitle_mode=official_only`) but unavailable, caption_discovery fails clearly
@@ -65,14 +65,14 @@ Rules:
 ### Phase 4: Subtitle Acquisition → Chunk Translation → Align → Export
 
 - **Runner**: `phase_runner.py --phase 4 --video-id [ID]`
-- **Pipeline** (7 atomic steps, all idempotent):
-  1. `phase_4_caption_fetch.py` — official caption path: yt-dlp → `temp/source_segments.json` (skip if ASR)
-  2. `phase_4_audio_extract.py` — ASR path only: `temp/video.mp4` → `temp/source_audio.wav` (skip if official)
-  3. `phase_4_asr.py` + `phase_4_asr_normalize.py` — ASR path: `temp/source_audio.wav` + WhisperX → `temp/asr_segments.json` → `temp/source_segments.json` (skip if official)
-  4. `phase_4_chunk_build.py` — splits `source_segments.json` into time-bounded chunks → `temp/chunks.json`
-  5. `phase_4_translate_scheduler.py` — parallel subagent translation (CHUNK_PARALLELISM env, default 4); each chunk: `text + glossary_terms + context` → `chunk_N.translated.txt`; writes back `chunks.json` status
-  6. `phase_4_validator.py` — validates all chunks: no missing IDs, no time overlap, no untranslated text → `temp/validation_errors.json` on failure
-  7. `phase_4_align.py` + `phase_4_export.py` — align translated chunks to source segments → `temp/subtitle_manifest.json` → `temp/bilingual.ass` / `temp/zh_only.ass`
+- **Pipeline script**: `scripts/phase_4/pipeline.py` (orchestrates 7 atomic steps):
+  1. `caption_fetch.py` — official caption path: yt-dlp → `temp/source_segments.json` (skip if ASR)
+  2. `audio_extract.py` — ASR path only: `temp/video.mp4` → `temp/source_audio.wav` (skip if official)
+  3. `asr.py` + `asr_normalize.py` — ASR path: `temp/source_audio.wav` + WhisperX → `temp/asr_segments.json` → `temp/source_segments.json` (skip if official)
+  4. `chunk_build.py` — splits `source_segments.json` into time-bounded chunks → `temp/chunks.json`
+  5. `translate_scheduler.py` — parallel subagent translation (CHUNK_PARALLELISM env, default 4); each chunk: `text + glossary_terms + context` → `chunk_N.translated.txt`; writes back `chunks.json` status
+  6. `validator.py` — validates all chunks: no missing IDs, no time overlap, no untranslated text → `temp/validation_errors.json` on failure
+  7. `align.py` + `export.py` — align translated chunks to source segments → `temp/subtitle_manifest.json` → `temp/bilingual.ass` / `temp/zh_only.ass`
 - **Intent-aware behavior**:
   - `subtitle_mode=auto`: use official if available, else ASR
   - `subtitle_mode=official_only`: require official captions, fail if unavailable
@@ -81,62 +81,40 @@ Rules:
   - `subtitle_layout=chinese_only`: export `zh_only.ass`
 - **Canonical outputs**:
   - `temp/source_audio.wav` — extracted audio for ASR reuse/debugging
-  - `temp/subtitle_manifest.json` — consumed by Phase 7
-  - `temp/subtitle_overlay.ass` — alias for Phase 7 compatibility
+  - `temp/subtitle_manifest.json` — consumed by Phase 6
+  - `temp/subtitle_overlay.ass` — alias for Phase 6 compatibility
   - `temp/chunks.json` — per-chunk translation status (completed/failed/pending)
   - `temp/translation_state.json` — translation contract (host model policy, prompt_version, glossary_hash...)
 - **Canonical contract**:
   - `source_segments.json` is the single normalized segment artifact used by chunking, align, and export regardless of caption source.
   - `translation_state.json` must include the translation contract at minimum: `model_id`, `prompt_version`, `glossary_hash`, `chunking_hash`, `source_hash`, `validator_version`.
   - Cache reuse is valid only when the translation contract matches; otherwise rerun translation for affected chunks.
-- **Failure isolation**: single chunk failure does not affect other chunks; failed chunks retryable individually
-- **Glossary**: user places `temp/glossary.json` (`[{term, translation}, ...]`) before Phase 4; merged into each chunk's `glossary_terms` at chunk_build time
-- **Translation model policy**:
-  - The skill does not choose a model itself. It uses the model already enabled by the host agent/CLI you invoked it from.
-  - `model_id` in `temp/translation_state.json` records host-managed model policy rather than a skill-selected model name.
-  - Preferred host selection: set `TRANSLATION_RUNNER=claude`, `TRANSLATION_RUNNER=gemini`, or `TRANSLATION_RUNNER=openclaw`.
-  - OpenClaw-specific override: set `OPENCLAW_AGENT_ID` if you want to use an agent other than the default `main`.
-  - Fully custom host wiring: set `TRANSLATOR_SUBAGENT_CMD` with placeholders `{task}`, `{input}`, `{output}`, `{agent_def}`.
-  - If delegated translation cannot run, Phase 4 fails the affected chunk and records the runner error. There is no direct API fallback.
-- **Style presets** (Phase 7 reburn):
+- **Style presets** (Phase 6 reburn):
   - `mobile_default` (recommended): white text, black outline, Chinese size 18
   - `high_contrast`: larger text, heavier outline
-  - `soft_dark`: warm-white text, dark outline
-  - `bold_yellow`: yellow emphasis for tutorials
-  - `black_white_thin`: black text, white outline (1.5px), Chinese 18/English 13
-  - `black_white_medium`: black text, white outline (2.5px), Chinese 20/English 14
-  - `black_white_thick`: black text, white outline (3.5px), Chinese 22/English 15
-  - `black_white_bold`: deep black text, white outline (3.0px) + white shadow, Chinese 21/English 14
-  - `neon_glow`: cyan text with dark teal glow, sci-fi aesthetic
-  - `warm_cream`: cream text with brown outline, vintage warmth
-  - `retro_orange`: orange text with dark brown outline, cinematic feel
-  - `mint_fresh`: mint green text with dark green outline, fresh & clean
-  - `elegant_pink`: light pink text with deep purple outline, elegant & soft
-  - `cinema_gold`: golden text with dark brown outline, classic cinema style
-  - `minimal_white`: pure white text, nearly no outline, minimalist
+  - ... (see `srt_to_ass.py` for full list)
 
 ### Phase 5: Voiceover
 
 - **Runner**: `phase_runner.py --phase 5 --video-id [ID]`
-- **Script**: `scripts/voiceover_tts.py`
+- **Script**: `scripts/phase_5/voiceover_tts.py`
 - **Output**: `temp/zh_voiceover.mp3`
 - **Skip**: If user chose original audio in Phase 1
 
 ### Phase 6: Compose Final Video
 
 - **Runner**: `phase_runner.py --phase 6 --video-id [ID]`
-- **Script**: `scripts/phase_6_video_muxer.py`
+- **Script**: `scripts/phase_6/video_muxer.py`
 - **Output**: `final/final_video.mp4`
 - **Modes**: `--original-audio` or with voiceover
 - **Rerender workflow**:
   - If preview quality is poor, edit `temp/subtitle_style.json` and change `preset`
   - Re-run Phase 6 to regenerate `.ass` and reburn subtitles without retranslating
-  - Re-run Phase 9 to generate description with new video reference
 
 ### Phase 7: Cover
 
 - **Runner**: `phase_runner.py --phase 7 --video-id [ID]`
-- **Script**: `scripts/phase_7_cover.py`
+- **Script**: `scripts/phase_7/cover.py`
 - **Input artifacts**:
   - `temp/cover_options.json` (generated by runner if absent)
   - `temp/cover_selection.json` (written after user selects a title/subtitle)
@@ -150,20 +128,20 @@ Rules:
 ### Phase 8: Description Generator
 
 - **Runner**: `phase_runner.py --phase 8 --video-id [ID]`
-- **Script**: `scripts/phase_9_description_generator.py`
+- **Script**: `scripts/phase_9/description_generator.py`
 - **Output**: `final/description.txt`
 - **Generates**: Bilibili-ready description with source info, translation notes, chapters (if available), and original description excerpt
 
 ### Phase 9: Upload Preview
 
-- **Runner**: `phase_runner.py --phase 8 --video-id [ID]`
+- **Runner**: `phase_runner.py --phase 9 --video-id [ID]`
 - **Reference**: `references/filebin.md`
 - **Output**: `final/preview.txt` with exactly one Filebin URL line
 
 ### Phase 10: Bilibili Publish
 
 - **Runner**: `phase_runner.py --phase 10 --video-id [ID]`
-- **Blocking check**: Fails immediately if `final_video.mp4` is missing — must run Phase 7 first.
+- **Blocking check**: Fails immediately if `final_video.mp4` is missing — must run Phase 6 first.
 - **Two publish modes**:
   - `draft` — writes `final/publish_result.json` with `mode: draft`. Runner skips Bilibili upload, confirms preview is available.
   - `formal` — full Bilibili publish via `agent-browser` skill UI automation. Writes `final/publish_result.json` with `mode: formal` and `bilibili_url`.
@@ -175,5 +153,5 @@ Rules:
 ### Phase 11: Cleanup
 
 - **Runner**: `phase_runner.py --phase 11 --video-id [ID]`
-- **Script**: `scripts/cleaner.py`
+- **Script**: `scripts/phase_10/cleaner.py`
 - **Skip**: Unless user explicitly requested cleanup in Phase 1

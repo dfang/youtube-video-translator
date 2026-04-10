@@ -13,8 +13,13 @@ import os
 import shlex
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
+_dev_root = Path(__file__).resolve().parent.parent.parent
+SKILL_ROOT = _dev_root
+sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
 
 RUNNER_ALIASES = {"claude-code": "claude", "gemini-cli": "gemini"}
 KNOWN_RUNNERS = ("claude", "gemini", "openclaw")
@@ -235,9 +240,19 @@ def _run_claude(
 
     try:
         payload = json.loads((result.stdout or "").strip())
-        text = payload[-1]["result"]
+        # Claude CLI -p --output-format json returns a JSON array of events.
+        # The last element is {"type": "result", "result": "..."}
+        if isinstance(payload, list) and len(payload) > 0:
+            text = payload[-1].get("result", "") if isinstance(payload[-1], dict) else ""
+        elif isinstance(payload, dict):
+            text = payload.get("result", "")
+        else:
+            text = ""
     except (json.JSONDecodeError, KeyError, IndexError, TypeError) as exc:
         return False, f"claude runner returned invalid JSON: {exc}", "claude"
+
+    if not text:
+        return False, "claude runner returned empty result", "claude"
 
     translated_file.write_text(_normalize_text_output(text), encoding="utf-8")
     return True, None, "claude"

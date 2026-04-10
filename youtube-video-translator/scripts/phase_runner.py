@@ -15,12 +15,13 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-_dev_root = Path(__file__).resolve().parent.parent
+_dev_root = Path(__file__).resolve().parent.parent.parent
 # Always use the actual location of the running script.
 # When OpenClaw invokes the installed skill, __file__.resolve() already points there.
 SKILL_ROOT = _dev_root
 
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
 
 from state_manager import get_state_path, load_state, update_phase, is_phase_completed, get_next_pending_phase, PHASE_NAMES
 from utils import (
@@ -157,7 +158,7 @@ def ensure_source_subtitles(temp_dir: Path, intent: dict | None = None) -> tuple
         return 1, "raw_video.mp4 not found"
 
     exit_code, output = run_subprocess(
-        [sys.executable, str(SKILL_ROOT / "scripts/whisperx_transcriber.py"), str(raw_video), str(temp_dir)],
+        [sys.executable, str(SKILL_ROOT / "scripts/phase_4/whisperx_transcriber.py"), str(raw_video), str(temp_dir)],
         heartbeat_phase=4,
         heartbeat_name=PHASE_NAMES[4],
     )
@@ -186,7 +187,7 @@ def ensure_audited_subtitles(temp_dir: Path) -> tuple[int, str]:
         return 1, "en_original.srt not found"
 
     exit_code, output = run_subprocess(
-        [sys.executable, str(SKILL_ROOT / "scripts/subtitle_splitter.py"), str(en_original), str(en_audited)]
+        [sys.executable, str(SKILL_ROOT / "scripts/phase_4/subtitle_splitter.py"), str(en_original), str(en_audited)]
     )
     if exit_code != 0:
         return exit_code, output
@@ -200,7 +201,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
 
     if phase == 0:
         exit_code, output = run_subprocess(
-            [sys.executable, str(SKILL_ROOT / "scripts/env_check.py")],
+            [sys.executable, str(SKILL_ROOT / "scripts/phase_0/env_check.py")],
             heartbeat_phase=0,
             heartbeat_name=PHASE_NAMES[0],
         )
@@ -241,13 +242,13 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
         # Step 3a: metadata probe
         report_step(3, "metadata_probe", "RUNNING")
         exit_code, output = run_subprocess(
-            [sys.executable, str(SKILL_ROOT / "scripts/phase_3_metadata_probe.py"), url, str(temp)],
+            [sys.executable, str(SKILL_ROOT / "scripts/phase_3/metadata_probe.py"), url, str(temp)],
             heartbeat_phase=3,
             heartbeat_name=PHASE_NAMES[3],
         )
         if exit_code != 0:
             report_step(3, "metadata_probe", "FAILED", output)
-            return "failed", f"phase_3_metadata_probe failed: {output}"
+            return "failed", f"phase_3/metadata_probe failed: {output}"
         if not (temp / "metadata.json").exists():
             report_step(3, "metadata_probe", "FAILED", "metadata.json not produced")
             return "failed", "metadata.json not produced"
@@ -257,11 +258,11 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
         subtitle_mode = (intent or {}).get("subtitle_mode", "auto")
         report_step(3, "caption_discovery", "RUNNING")
         exit_code, output = run_subprocess(
-            [sys.executable, str(SKILL_ROOT / "scripts/phase_3_caption_discovery.py"), str(temp), subtitle_mode],
+            [sys.executable, str(SKILL_ROOT / "scripts/phase_3/caption_discovery.py"), str(temp), subtitle_mode],
         )
         if exit_code != 0:
             report_step(3, "caption_discovery", "FAILED", output)
-            return "failed", f"phase_3_caption_discovery failed: {output}"
+            return "failed", f"phase_3/caption_discovery failed: {output}"
         if not (temp / "caption_plan.json").exists():
             report_step(3, "caption_discovery", "FAILED", "caption_plan.json not produced")
             return "failed", "caption_plan.json not produced"
@@ -270,13 +271,13 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
         # Step 3c: video download
         report_step(3, "video_download", "RUNNING")
         exit_code, output = run_subprocess(
-            [sys.executable, str(SKILL_ROOT / "scripts/phase_3_video_download.py"), url, str(temp)],
+            [sys.executable, str(SKILL_ROOT / "scripts/phase_3/video_download.py"), url, str(temp)],
             heartbeat_phase=3,
             heartbeat_name=PHASE_NAMES[3],
         )
         if exit_code != 0:
             report_step(3, "video_download", "FAILED", output)
-            return "failed", f"phase_3_video_download failed: {output}"
+            return "failed", f"phase_3/video_download failed: {output}"
         raw_video = temp / "raw_video.mp4"
         if not raw_video.exists():
             report_step(3, "video_download", "FAILED", "raw_video.mp4 not produced")
@@ -289,7 +290,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
         
         exit_code, output = run_subprocess(
             [
-                sys.executable, str(SKILL_ROOT / "scripts/phase_4_pipeline.py"),
+                sys.executable, str(SKILL_ROOT / "scripts/phase_4/pipeline.py"),
                 "--video-id", video_id,
                 "--temp-dir", str(temp),
                 "--layout", layout
@@ -329,7 +330,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
             return "done", str(output)
 
         exit_code, logs = run_subprocess(
-            [sys.executable, str(SKILL_ROOT / "scripts/voiceover_tts.py"), str(srt_file), str(output)],
+            [sys.executable, str(SKILL_ROOT / "scripts/phase_5/voiceover_tts.py"), str(srt_file), str(output)],
             heartbeat_phase=5,
             heartbeat_name=PHASE_NAMES[5],
         )
@@ -342,7 +343,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
         original_audio = (intent or {}).get("audio_mode") == "original"
         
         cmd = [
-            sys.executable, str(SKILL_ROOT / "scripts/phase_6_video_muxer.py"),
+            sys.executable, str(SKILL_ROOT / "scripts/phase_6/video_muxer.py"),
             "--video-id", video_id,
             "--temp-dir", str(temp),
             "--final-dir", str(final),
@@ -365,7 +366,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
         layout = (intent or {}).get("subtitle_layout", "bilingual")
         exit_code, output = run_subprocess(
             [
-                sys.executable, str(SKILL_ROOT / "scripts/phase_7_cover.py"),
+                sys.executable, str(SKILL_ROOT / "scripts/phase_7/cover.py"),
                 "--video-id", video_id,
                 "--temp-dir", str(temp),
                 "--final-dir", str(final),
@@ -387,7 +388,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
     if phase == 8:
         exit_code, output = run_subprocess(
             [
-                sys.executable, str(SKILL_ROOT / "scripts/phase_9_description_generator.py"),
+                sys.executable, str(SKILL_ROOT / "scripts/phase_8/description_generator.py"),
                 "--video-id", video_id,
                 "--temp-dir", str(temp),
                 "--final-dir", str(final),
@@ -430,7 +431,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
 
         final_video = final / "final_video.mp4"
         if not final_video.exists():
-            return "failed", "final_video.mp4 not found — run phase 7 first"
+            return "failed", "final_video.mp4 not found — run phase 6 first"
 
         # Check publish mode via publish_result.json or prompt
         publish_result = final / "publish_result.json"
@@ -463,7 +464,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
             return "done", "nothing to clean"
 
         exit_code, output = run_subprocess(
-            [sys.executable, str(SKILL_ROOT / "scripts/cleaner.py"), str(temp)],
+            [sys.executable, str(SKILL_ROOT / "scripts/phase_11/cleaner.py"), str(temp)],
             heartbeat_phase=11,
             heartbeat_name=PHASE_NAMES[11],
         )
@@ -552,7 +553,7 @@ def phase_needs_refresh(video_id: str, phase: int, intent: dict | None = None) -
             sources.append(voiceover)
         return not target_is_fresh(final_video, sources)
 
-    if phase == 8:
+    if phase == 9:
         final_video = final / "final_video.mp4"
         preview_file = final / "preview.txt"
         if not final_video.exists() or not preview_file.exists():
@@ -565,7 +566,7 @@ def phase_needs_refresh(video_id: str, phase: int, intent: dict | None = None) -
 def run_from_state(video_id: str, intent: dict | None = None) -> str:
     while True:
         next_phase = get_next_pending_phase(video_id)
-        if next_phase > 10:
+        if next_phase > 11:
             return "done"
 
         outcome = run_single_phase(video_id, next_phase, intent)

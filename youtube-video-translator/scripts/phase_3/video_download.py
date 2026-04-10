@@ -11,8 +11,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-SKILL_ROOT = Path(__file__).resolve().parent.parent
+_dev_root = Path(__file__).resolve().parent.parent.parent
+SKILL_ROOT = _dev_root
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/phase_3"))
 
 from yt_dlp_cookies import detect_browser_cookie_args
 

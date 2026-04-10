@@ -9,8 +9,10 @@ import json
 import argparse
 from pathlib import Path
 
-SKILL_ROOT = Path(__file__).resolve().parent.parent
+_dev_root = Path(__file__).resolve().parent.parent.parent
+SKILL_ROOT = _dev_root
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
 
 from utils import get_temp_dir, get_final_dir, utc_now, shorten_text
 

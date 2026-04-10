@@ -20,9 +20,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
-SKILL_ROOT = Path(__file__).resolve().parent.parent
-SYS_PATH = str(SKILL_ROOT / "scripts")
-sys.path.insert(0, SYS_PATH)
+_dev_root = Path(__file__).resolve().parent.parent.parent
+SKILL_ROOT = _dev_root
+sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/phase_4"))
 
 DEFAULT_PARALLELISM = int(os.environ.get("CHUNK_PARALLELISM", "4"))
 MAX_ATTEMPTS = 3

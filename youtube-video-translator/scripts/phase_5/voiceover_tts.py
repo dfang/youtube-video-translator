@@ -6,6 +6,13 @@ import re
 import subprocess
 import shutil
 import tempfile
+from pathlib import Path
+
+_dev_root = Path(__file__).resolve().parent.parent.parent
+SKILL_ROOT = _dev_root
+sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
+
 from utils import get_ffmpeg_path, get_ffprobe_path
 
 FFMPEG = get_ffmpeg_path()

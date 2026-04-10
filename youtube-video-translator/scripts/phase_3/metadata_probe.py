@@ -14,11 +14,14 @@ import sys
 import hashlib
 from pathlib import Path
 
-SKILL_ROOT = Path(__file__).resolve().parent.parent
+_dev_root = Path(__file__).resolve().parent.parent.parent
+SKILL_ROOT = _dev_root
 SCHEMA_PATH = SKILL_ROOT / "schemas" / "metadata.schema.json"
 
 # sys.path manipulation for state_manager (used by phase_runner convention)
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/phase_3"))
 
 from yt_dlp_cookies import detect_browser_cookie_args
 

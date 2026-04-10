@@ -2,6 +2,12 @@ import os
 import sys
 import subprocess
 import json
+from pathlib import Path
+
+_dev_root = Path(__file__).resolve().parent.parent.parent
+SKILL_ROOT = _dev_root
+sys.path.insert(0, str(SKILL_ROOT / "scripts"))
+sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
 
 def download_video(url, output_dir):
     """
