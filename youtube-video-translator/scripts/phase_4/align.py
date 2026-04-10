@@ -19,6 +19,8 @@ SKILL_ROOT = _dev_root
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 sys.path.insert(0, str(SKILL_ROOT / "scripts/core"))
 
+from srt import chunk_translated_path
+
 
 def is_manifest_fresh(temp_dir: Path) -> bool:
     f = temp_dir / "subtitle_manifest.json"
@@ -40,7 +42,7 @@ def load_chunks(temp_dir: Path) -> dict:
 
 
 def load_translated_chunk(chunk_id: int, temp_dir: Path) -> str:
-    f = temp_dir / f"chunk_{chunk_id}.translated.txt"
+    f = chunk_translated_path(temp_dir, chunk_id)
     if f.exists():
         return f.read_text(encoding="utf-8").strip()
     return ""
