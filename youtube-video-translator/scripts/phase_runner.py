@@ -362,68 +362,8 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
             return "done", str(final_video)
         return "failed", output
 
-    if phase == 7:
-        layout = (intent or {}).get("subtitle_layout", "bilingual")
-        exit_code, output = run_subprocess(
-            [
-                sys.executable, str(SKILL_ROOT / "scripts/phase_7/cover.py"),
-                "--video-id", video_id,
-                "--temp-dir", str(temp),
-                "--final-dir", str(final),
-                "--layout", layout
-            ],
-            heartbeat_phase=7,
-            heartbeat_name=PHASE_NAMES[7]
-        )
-        if exit_code == 0:
-            if output.startswith("WAIT:"):
-                return "waiting", output
-            if output.startswith("interactive:"):
-                return "waiting", output
-            cover = final / "cover_final.jpg"
-            if cover.exists():
-                return "done", str(cover)
-        return "failed", output
-
-    if phase == 8:
-        exit_code, output = run_subprocess(
-            [
-                sys.executable, str(SKILL_ROOT / "scripts/phase_8/description_generator.py"),
-                "--video-id", video_id,
-                "--temp-dir", str(temp),
-                "--final-dir", str(final),
-            ],
-            heartbeat_phase=8,
-            heartbeat_name=PHASE_NAMES[8],
-        )
-        if exit_code == 0:
-            return "done", output
-        return "failed", output
-
-    if phase == 9:
-        video = final / "final_video.mp4"
-        if not video.exists():
-            return "failed", "final_video.mp4 not found"
-
-        bin_id = video_id
-        url = f"https://filebin.net/{bin_id}/final_video.mp4"
-        exit_code, output = run_subprocess(
-            [
-                "curl", "-fsS", "-X", "PUT", "-H", "Content-Type: video/mp4",
-                "--data-binary", f"@{video}", url,
-            ],
-            heartbeat_phase=9,
-            heartbeat_name=PHASE_NAMES[9],
-        )
-        if exit_code != 0:
-            return "failed", output or "file upload failed"
-
-        preview_file = final / "preview.txt"
-        if preview_file.exists() and target_is_fresh(preview_file, [video]):
-            return "done", str(preview_file)
-
-        preview_file.write_text(url, encoding="utf-8")
-        return "done", str(preview_file)
+    if phase in (7, 8, 9):
+        return "skipped", f"Phase {phase} now uses sub-agent. See agents/[cover|description|uploader].md"
 
     if phase == 10:
         if intent and not intent.get("publish"):
