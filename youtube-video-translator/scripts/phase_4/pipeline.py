@@ -76,43 +76,56 @@ def main():
         report_step("caption_fetch", "DONE", "output: temp/source_segments.json")
     else:
         # ASR path: audio extract + ASR + normalize
-        video_file = temp / "raw_video.mp4"
-        if not video_file.exists():
+        # Skip if source_segments.json already exists (ASR was already done)
+        if (temp / "source_segments.json").exists():
+            import json
+            try:
+                data = json.loads((temp / "source_segments.json").read_text(encoding="utf-8"))
+                if data.get("segments"):
+                    report_step("asr", "SKIP", "source_segments.json already exists")
+                    caption_source = "skip"  # signal to skip chunk_build freshness check too
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        if caption_source == "skip":
+            pass  # source_segments.json already exists, ASR skipped
+        elif not (temp / "raw_video.mp4").exists():
             print("Error: raw_video.mp4 not found — run phase 3 first")
             sys.exit(1)
-        
-        source_audio = temp / "source_audio.wav"
-        if (Path(__file__).parent / "audio_extract.py").exists():
-            report_step("audio_extract", "RUNNING")
+        else:
+            source_audio = temp / "source_audio.wav"
+            if (Path(__file__).parent / "audio_extract.py").exists():
+                report_step("audio_extract", "RUNNING")
+                exit_code, output = run_subprocess(
+                    [sys.executable, str(Path(__file__).parent / "audio_extract.py"), str(temp / "raw_video.mp4"), str(temp)],
+                    heartbeat_phase=4,
+                    heartbeat_name=PHASE_NAMES[4],
+                )
+                if exit_code != 0:
+                    report_step("audio_extract", "FAILED", output)
+                    sys.exit(exit_code)
+                report_step("audio_extract", "DONE", "output: temp/source_audio.wav")
+
+            video_or_audio = source_audio if source_audio.exists() else temp / "raw_video.mp4"
+            report_step("asr", "RUNNING")
             exit_code, output = run_subprocess(
-                [sys.executable, str(Path(__file__).parent / "audio_extract.py"), str(video_file), str(temp)],
+                [sys.executable, str(Path(__file__).parent / "asr.py"), str(video_or_audio), str(temp)],
                 heartbeat_phase=4,
                 heartbeat_name=PHASE_NAMES[4],
             )
             if exit_code != 0:
-                report_step("audio_extract", "FAILED", output)
+                report_step("asr", "FAILED", output)
                 sys.exit(exit_code)
-            report_step("audio_extract", "DONE", "output: temp/source_audio.wav")
+            report_step("asr", "DONE", "output: temp/asr_segments.json")
 
-        report_step("asr", "RUNNING")
-        exit_code, output = run_subprocess(
-            [sys.executable, str(Path(__file__).parent / "asr.py"), str(source_audio if source_audio.exists() else video_file), str(temp)],
-            heartbeat_phase=4,
-            heartbeat_name=PHASE_NAMES[4],
-        )
-        if exit_code != 0:
-            report_step("asr", "FAILED", output)
-            sys.exit(exit_code)
-        report_step("asr", "DONE", "output: temp/asr_segments.json")
-
-        report_step("asr_normalize", "RUNNING")
-        exit_code, output = run_subprocess(
-            [sys.executable, str(Path(__file__).parent / "asr_normalize.py"), str(temp)],
-        )
-        if exit_code != 0:
-            report_step("asr_normalize", "FAILED", output)
-            sys.exit(exit_code)
-        report_step("asr_normalize", "DONE", "output: temp/source_segments.json")
+            report_step("asr_normalize", "RUNNING")
+            exit_code, output = run_subprocess(
+                [sys.executable, str(Path(__file__).parent / "asr_normalize.py"), str(temp)],
+            )
+            if exit_code != 0:
+                report_step("asr_normalize", "FAILED", output)
+                sys.exit(exit_code)
+            report_step("asr_normalize", "DONE", "output: temp/source_segments.json")
 
     # Step 4b: chunk build
     if not (temp / "chunks.json").exists():
