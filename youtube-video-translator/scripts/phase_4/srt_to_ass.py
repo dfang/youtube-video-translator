@@ -15,7 +15,7 @@ PRESET_STYLES = {
     "mobile_default": {
         "label": "移动端默认（推荐）",
         "description": "白字、黑描边、中文 18，适合手机竖横握观看。",
-        "font_name": "PingFang SC Semibold",
+        "font_name": "STHeiti",
         "font_size": 18,
         "english_font_size": 14,
         "text_color": "#FFFFFF",
@@ -28,7 +28,7 @@ PRESET_STYLES = {
     "high_contrast": {
         "label": "高对比",
         "description": "更粗描边、更大字号，适合亮背景或复杂画面。",
-        "font_name": "PingFang SC Semibold",
+        "font_name": "STHeiti",
         "font_size": 22,
         "english_font_size": 16,
         "text_color": "#FFFFFF",
@@ -41,7 +41,7 @@ PRESET_STYLES = {
     "soft_dark": {
         "label": "柔和暗边",
         "description": "暖白字配深灰描边，观感更柔和。",
-        "font_name": "PingFang SC Semibold",
+        "font_name": "STHeiti",
         "font_size": 18,
         "english_font_size": 14,
         "text_color": "#FFF8E8",
@@ -54,7 +54,7 @@ PRESET_STYLES = {
     "bold_yellow": {
         "label": "黄色强调",
         "description": "黄字深描边，适合教程、解说类内容。",
-        "font_name": "PingFang SC Semibold",
+        "font_name": "STHeiti",
         "font_size": 20,
         "english_font_size": 15,
         "text_color": "#FFD700",
@@ -67,7 +67,7 @@ PRESET_STYLES = {
     "black_white_thin": {
         "label": "黑字白描细",
         "description": "黑字配白描边（1.5px），中文 18/英文 13，适合浅色背景。",
-        "font_name": "PingFang SC Semibold",
+        "font_name": "STHeiti",
         "font_size": 18,
         "english_font_size": 13,
         "text_color": "#1A1A1A",
@@ -80,7 +80,7 @@ PRESET_STYLES = {
     "black_white_medium": {
         "label": "黑字白描中",
         "description": "黑字配白描边（2.5px），中文 20/英文 14，中等醒目。",
-        "font_name": "PingFang SC Semibold",
+        "font_name": "STHeiti",
         "font_size": 20,
         "english_font_size": 14,
         "text_color": "#1A1A1A",
@@ -93,7 +93,7 @@ PRESET_STYLES = {
     "black_white_thick": {
         "label": "黑字白描粗",
         "description": "黑字配白描边（3.5px），中文 22/英文 15，粗壮有力。",
-        "font_name": "PingFang SC Semibold",
+        "font_name": "STHeiti",
         "font_size": 22,
         "english_font_size": 15,
         "text_color": "#1A1A1A",
@@ -106,7 +106,7 @@ PRESET_STYLES = {
     "black_white_bold": {
         "label": "黑字白描强调",
         "description": "深黑字配白描边（3.0px）+白底阴影，中文 21/英文 14。",
-        "font_name": "PingFang SC Semibold",
+        "font_name": "STHeiti",
         "font_size": 21,
         "english_font_size": 14,
         "text_color": "#0D0D0D",
@@ -120,7 +120,7 @@ PRESET_STYLES = {
     "neon_glow": {
         "label": "霓虹发光",
         "description": "亮青字配深色外发光，科幻感十足。",
-        "font_name": "PingFang SC Semibold",
+        "font_name": "STHeiti",
         "font_size": 20,
         "english_font_size": 14,
         "text_color": "#00FFFF",
@@ -133,7 +133,7 @@ PRESET_STYLES = {
     "warm_cream": {
         "label": "暖色奶油",
         "description": "奶油白字配棕色描边，温馨复古感。",
-        "font_name": "PingFang SC Semibold",
+        "font_name": "STHeiti",
         "font_size": 18,
         "english_font_size": 14,
         "text_color": "#FFF5E6",
@@ -146,7 +146,7 @@ PRESET_STYLES = {
     "retro_orange": {
         "label": "复古橙色",
         "description": "橙色文字配深棕描边，电影感强。",
-        "font_name": "PingFang SC Semibold",
+        "font_name": "STHeiti",
         "font_size": 20,
         "english_font_size": 14,
         "text_color": "#FF8C00",
@@ -159,7 +159,7 @@ PRESET_STYLES = {
     "mint_fresh": {
         "label": "薄荷清新",
         "description": "薄荷绿字配深绿描边，清爽舒适。",
-        "font_name": "PingFang SC Semibold",
+        "font_name": "STHeiti",
         "font_size": 18,
         "english_font_size": 14,
         "text_color": "#98FB98",
@@ -172,7 +172,7 @@ PRESET_STYLES = {
     "elegant_pink": {
         "label": "优雅粉紫",
         "description": "浅粉紫字配深紫描边，柔美风格。",
-        "font_name": "PingFang SC Semibold",
+        "font_name": "STHeiti",
         "font_size": 18,
         "english_font_size": 14,
         "text_color": "#FFB6C1",
@@ -185,7 +185,7 @@ PRESET_STYLES = {
     "cinema_gold": {
         "label": "影院金标",
         "description": "金色字配深棕描边，影院字幕经典风格。",
-        "font_name": "PingFang SC Semibold",
+        "font_name": "STHeiti",
         "font_size": 20,
         "english_font_size": 14,
         "text_color": "#DAA520",
@@ -198,7 +198,7 @@ PRESET_STYLES = {
     "minimal_white": {
         "label": "极简白字",
         "description": "纯白字几乎无描边，极简主义风格。",
-        "font_name": "PingFang SC Semibold",
+        "font_name": "STHeiti",
         "font_size": 18,
         "english_font_size": 14,
         "text_color": "#FFFFFF",
@@ -230,7 +230,7 @@ def hex_to_color(hex_value, alpha=0):
 
 def apply_default_style(subs, resolved_style):
     style = pysubs2.SSAStyle()
-    style.fontname = resolved_style.get("font_name", "PingFang SC Semibold")
+    style.fontname = resolved_style.get("font_name", "STHeiti")
     style.fontsize = resolved_style.get("font_size", 18)
     style.primarycolor = hex_to_color(resolved_style.get("text_color", "#FFFFFF"))
     style.outlinecolor = hex_to_color(resolved_style.get("outline_color", "#000000"))
