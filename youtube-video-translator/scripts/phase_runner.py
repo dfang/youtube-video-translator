@@ -339,33 +339,10 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
 
     if phase == 6:
         layout = (intent or {}).get("subtitle_layout", "bilingual")
-        exit_code, output = run_subprocess(
-            [
-                sys.executable, str(SKILL_ROOT / "scripts/phase_6_cover.py"),
-                "--video-id", video_id,
-                "--temp-dir", str(temp),
-                "--final-dir", str(final),
-                "--layout", layout
-            ],
-            heartbeat_phase=6,
-            heartbeat_name=PHASE_NAMES[6]
-        )
-        if exit_code == 0:
-            if output.startswith("WAIT:"):
-                return "waiting", output
-            if output.startswith("interactive:"):
-                return "waiting", output
-            cover = final / "cover_final.jpg"
-            if cover.exists():
-                return "done", str(cover)
-        return "failed", output
-
-    if phase == 7:
-        layout = (intent or {}).get("subtitle_layout", "bilingual")
         original_audio = (intent or {}).get("audio_mode") == "original"
         
         cmd = [
-            sys.executable, str(SKILL_ROOT / "scripts/phase_7_video_muxer.py"),
+            sys.executable, str(SKILL_ROOT / "scripts/phase_6_video_muxer.py"),
             "--video-id", video_id,
             "--temp-dir", str(temp),
             "--final-dir", str(final),
@@ -376,12 +353,35 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
 
         exit_code, output = run_subprocess(
             cmd,
-            heartbeat_phase=7,
-            heartbeat_name=PHASE_NAMES[7],
+            heartbeat_phase=6,
+            heartbeat_name=PHASE_NAMES[6],
         )
         if exit_code == 0:
             final_video = final / "final_video.mp4"
             return "done", str(final_video)
+        return "failed", output
+
+    if phase == 7:
+        layout = (intent or {}).get("subtitle_layout", "bilingual")
+        exit_code, output = run_subprocess(
+            [
+                sys.executable, str(SKILL_ROOT / "scripts/phase_7_cover.py"),
+                "--video-id", video_id,
+                "--temp-dir", str(temp),
+                "--final-dir", str(final),
+                "--layout", layout
+            ],
+            heartbeat_phase=7,
+            heartbeat_name=PHASE_NAMES[7]
+        )
+        if exit_code == 0:
+            if output.startswith("WAIT:"):
+                return "waiting", output
+            if output.startswith("interactive:"):
+                return "waiting", output
+            cover = final / "cover_final.jpg"
+            if cover.exists():
+                return "done", str(cover)
         return "failed", output
 
     if phase == 8:
@@ -518,7 +518,7 @@ def phase_needs_refresh(video_id: str, phase: int, intent: dict | None = None) -
     temp = get_temp_dir(video_id)
     final = get_final_dir(video_id)
 
-    if phase == 7:
+    if phase == 6:
         final_video = final / "final_video.mp4"
         ass = temp / "subtitle_overlay.ass"
         video = temp / "raw_video.mp4"
