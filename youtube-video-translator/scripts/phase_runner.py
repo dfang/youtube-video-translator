@@ -87,14 +87,14 @@ def ensure_mise_environment():
 
 def report_step(phase: int, step: str, status: str, msg: str = "") -> None:
     if status == "RUNNING":
-        print(f"[Phase {phase}/10][STEP][RUNNING] {step}")
+        print(f"[Phase {phase}/11][STEP][RUNNING] {step}")
     elif status == "DONE":
-        line = f"[Phase {phase}/10][STEP][DONE] {step}"
+        line = f"[Phase {phase}/11][STEP][DONE] {step}"
         if msg:
             line += f" | {msg}"
         print(line)
     elif status == "FAILED":
-        line = f"[Phase {phase}/10][STEP][FAILED] {step}"
+        line = f"[Phase {phase}/11][STEP][FAILED] {step}"
         if msg:
             line += f" | error: {msg}"
         print(line)
@@ -385,6 +385,21 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
         return "failed", output
 
     if phase == 8:
+        exit_code, output = run_subprocess(
+            [
+                sys.executable, str(SKILL_ROOT / "scripts/phase_9_description_generator.py"),
+                "--video-id", video_id,
+                "--temp-dir", str(temp),
+                "--final-dir", str(final),
+            ],
+            heartbeat_phase=8,
+            heartbeat_name=PHASE_NAMES[8],
+        )
+        if exit_code == 0:
+            return "done", output
+        return "failed", output
+
+    if phase == 9:
         video = final / "final_video.mp4"
         if not video.exists():
             return "failed", "final_video.mp4 not found"
@@ -396,8 +411,8 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
                 "curl", "-fsS", "-X", "PUT", "-H", "Content-Type: video/mp4",
                 "--data-binary", f"@{video}", url,
             ],
-            heartbeat_phase=8,
-            heartbeat_name=PHASE_NAMES[8],
+            heartbeat_phase=9,
+            heartbeat_name=PHASE_NAMES[9],
         )
         if exit_code != 0:
             return "failed", output or "file upload failed"
@@ -409,7 +424,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
         preview_file.write_text(url, encoding="utf-8")
         return "done", str(preview_file)
 
-    if phase == 9:
+    if phase == 10:
         if intent and not intent.get("publish"):
             return "done", "skipped: publishing not requested"
 
@@ -440,7 +455,7 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
         # formal path: full Bilibili publish via agent_browser
         return "waiting", "interactive: agent_browser_delegation_required"
 
-    if phase == 10:
+    if phase == 11:
         cleanup_requested = bool(intent and intent.get("cleanup"))
         if not cleanup_requested:
             return "done", "skipped: cleanup not requested"
@@ -449,8 +464,8 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
 
         exit_code, output = run_subprocess(
             [sys.executable, str(SKILL_ROOT / "scripts/cleaner.py"), str(temp)],
-            heartbeat_phase=10,
-            heartbeat_name=PHASE_NAMES[10],
+            heartbeat_phase=11,
+            heartbeat_name=PHASE_NAMES[11],
         )
         return ("done", output) if exit_code == 0 else ("failed", output)
 
@@ -460,20 +475,20 @@ def run_phase_command(phase: int, video_id: str, intent: dict | None = None) -> 
 def report_status(phase: int, status: str, msg: str = "", artifact: str = "") -> None:
     phase_name = PHASE_NAMES.get(phase, f"phase_{phase}")
     if status == "RUNNING":
-        print(f"[Phase {phase}/10][RUNNING] {phase_name}")
+        print(f"[Phase {phase}/11][RUNNING] {phase_name}")
     elif status == "DONE":
-        out = f"[Phase {phase}/10][DONE] {phase_name}"
+        out = f"[Phase {phase}/11][DONE] {phase_name}"
         if artifact:
             out += f" | output: {artifact}"
         print(out)
     elif status == "WAIT":
         reason = msg or "waiting for input"
-        print(f"[Phase {phase}/10][WAIT] {phase_name} | reason: {reason}")
+        print(f"[Phase {phase}/11][WAIT] {phase_name} | reason: {reason}")
     elif status == "SKIP":
         reason = msg or "already completed"
-        print(f"[Phase {phase}/10][SKIP] {phase_name} | reason: {reason}")
+        print(f"[Phase {phase}/11][SKIP] {phase_name} | reason: {reason}")
     elif status == "FAILED":
-        print(f"[Phase {phase}/10][FAILED] {phase_name} | error: {msg}")
+        print(f"[Phase {phase}/11][FAILED] {phase_name} | error: {msg}")
 
 
 def run_single_phase(video_id: str, phase: int, intent: dict | None = None) -> str:

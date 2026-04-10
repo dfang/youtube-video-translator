@@ -18,9 +18,10 @@ PHASE_NAMES = {
     5: "voiceover",
     6: "compose",
     7: "cover",
-    8: "upload_preview",
-    9: "bilibili_publish",
-    10: "cleanup",
+    8: "description",
+    9: "upload_preview",
+    10: "bilibili_publish",
+    11: "cleanup",
 }
 
 

@@ -131,7 +131,7 @@ Rules:
 - **Rerender workflow**:
   - If preview quality is poor, edit `temp/subtitle_style.json` and change `preset`
   - Re-run Phase 6 to regenerate `.ass` and reburn subtitles without retranslating
-  - Re-run Phase 8 to upload a fresh preview if needed
+  - Re-run Phase 9 to generate description with new video reference
 
 ### Phase 7: Cover
 
@@ -147,15 +147,22 @@ Rules:
   - Main agent presents them to the user and writes the chosen title/subtitle to `temp/cover_selection.json`
   - Re-running Phase 7 consumes the selection and renders the cover
 
-### Phase 8: Upload Preview
+### Phase 8: Description Generator
+
+- **Runner**: `phase_runner.py --phase 8 --video-id [ID]`
+- **Script**: `scripts/phase_9_description_generator.py`
+- **Output**: `final/description.txt`
+- **Generates**: Bilibili-ready description with source info, translation notes, chapters (if available), and original description excerpt
+
+### Phase 9: Upload Preview
 
 - **Runner**: `phase_runner.py --phase 8 --video-id [ID]`
 - **Reference**: `references/filebin.md`
 - **Output**: `final/preview.txt` with exactly one Filebin URL line
 
-### Phase 9: Bilibili Publish
+### Phase 10: Bilibili Publish
 
-- **Runner**: `phase_runner.py --phase 9 --video-id [ID]`
+- **Runner**: `phase_runner.py --phase 10 --video-id [ID]`
 - **Blocking check**: Fails immediately if `final_video.mp4` is missing — must run Phase 7 first.
 - **Two publish modes**:
   - `draft` — writes `final/publish_result.json` with `mode: draft`. Runner skips Bilibili upload, confirms preview is available.
@@ -165,8 +172,8 @@ Rules:
 - **Required fields**: `status`, `video_id`, `mode`, `title`, `description`, `tags`, and either `bilibili_url` or `draft_id`
 - **Reference**: `agents/publisher.md`
 
-### Phase 10: Cleanup
+### Phase 11: Cleanup
 
-- **Runner**: `phase_runner.py --phase 10 --video-id [ID]`
+- **Runner**: `phase_runner.py --phase 11 --video-id [ID]`
 - **Script**: `scripts/cleaner.py`
 - **Skip**: Unless user explicitly requested cleanup in Phase 1
