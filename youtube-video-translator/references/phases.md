@@ -134,9 +134,10 @@ Rules:
 
 ### Phase 9: Upload Preview
 
-- **Runner**: `phase_runner.py --phase 9 --video-id [ID]`
-- **Reference**: `references/filebin.md`
+- **Runner**: spawn subagent using `agents/uploader.md`
+- **Agent provides**: `video_id`
 - **Output**: `final/preview.txt` with exactly one Filebin URL line
+- **Reference**: `references/filebin.md` (API details)
 
 ### Phase 10: Bilibili Publish
 
